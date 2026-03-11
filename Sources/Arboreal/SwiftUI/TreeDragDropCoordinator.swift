@@ -103,14 +103,6 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             createFloatingDragView(for: cell, in: window, touchLocation: session.location(in: window))
         }
 
-//        // Return a 1x1 invisible preview to suppress UIKit's default
-//        let invisible = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
-//        invisible.backgroundColor = .clear
-//        let params = UIDragPreviewParameters()
-//        params.backgroundColor = .clear
-//        let center = session.location(in: containerView)
-//        let target = UIDragPreviewTarget(container: containerView, center: center)
-//        return UITargetedDragPreview(view: invisible, parameters: params, target: target)
         return nil
     }
 
