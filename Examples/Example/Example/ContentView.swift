@@ -103,7 +103,7 @@ struct ContentView: View {
                 tree: $tree,
                 selectedIDs: $selectedIDs,
                 expansionState: expansionState,
-                configuration: .exampleConfiguration
+                configuration: .exampleConfiguration(tree: tree)
             ) { item, depth, isSelected, isExpanded in
                 switch item {
                 case .section(let id, let title, let icon):
@@ -145,7 +145,7 @@ struct ContentView: View {
 // MARK: - Configuration
 
 extension TreeDragDropConfiguration where Content == OutlineItem {
-    static var exampleConfiguration: TreeDragDropConfiguration {
+    static func exampleConfiguration(tree: [TreeNode<OutlineItem>]) -> TreeDragDropConfiguration {
         var config = TreeDragDropConfiguration()
         config.rowHeight = 48
         config.indentationWidth = 24
@@ -155,6 +155,27 @@ extension TreeDragDropConfiguration where Content == OutlineItem {
             borderWidth: 1,
             cornerRadius: 10
         ))
+        config.canDropIntoSection = { _, payload in
+            // Prevent sections from being nested inside other sections
+            func isSection(_ id: UUID) -> Bool {
+                func find(in nodes: [TreeNode<OutlineItem>]) -> Bool {
+                    for node in nodes {
+                        if node.id == id { return node.content.isContainer }
+                        if find(in: node.children) { return true }
+                    }
+                    return false
+                }
+                return find(in: tree)
+            }
+            switch payload {
+            case .singleItem(let id):
+                return !isSection(id)
+            case .section(let id):
+                return !isSection(id)
+            case .multipleItems(let ids):
+                return !ids.contains(where: { isSection($0) })
+            }
+        }
         return config
     }
 }
