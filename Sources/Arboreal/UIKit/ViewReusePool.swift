@@ -26,6 +26,8 @@ final class ViewReusePool<Cell: UIView> {
 
     func recycle(for key: AnyHashable) {
         if let cell = inUse.removeValue(forKey: key) {
+            cell.removeFromSuperview()
+            (cell as? TreeNodeCell)?.prepareForReuse()
             available.append(cell)
         }
     }
@@ -38,6 +40,10 @@ final class ViewReusePool<Cell: UIView> {
     }
 
     func reset() {
+        for cell in inUse.values {
+            cell.removeFromSuperview()
+            (cell as? TreeNodeCell)?.prepareForReuse()
+        }
         available.append(contentsOf: inUse.values)
         inUse.removeAll()
     }
