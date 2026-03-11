@@ -5,14 +5,14 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
     @Binding var selectedIDs: Set<Content.ID>
     var expansionState: ExpansionState<Content.ID>
     var configuration: TreeDragDropConfiguration<Content>
-    @ViewBuilder var cellContent: @MainActor (FlatTreeEntry<Content>) -> CellContent
+    @ViewBuilder var cellContent: @MainActor (Content, Int, Bool, Bool) -> CellContent
 
     public init(
         tree: Binding<[TreeNode<Content>]>,
         selectedIDs: Binding<Set<Content.ID>>,
         expansionState: ExpansionState<Content.ID>,
         configuration: TreeDragDropConfiguration<Content> = .init(),
-        @ViewBuilder cellContent: @escaping @MainActor (FlatTreeEntry<Content>) -> CellContent
+        @ViewBuilder cellContent: @escaping @MainActor (Content, Int, Bool, Bool) -> CellContent
     ) {
         self._tree = tree
         self._selectedIDs = selectedIDs
@@ -24,8 +24,9 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
     public func makeUIView(context: Context) -> TreeContainerView<Content> {
         let view = TreeContainerView<Content>(frame: .zero)
         view.configuration = configuration
+        let selectedIDs = selectedIDs
         view.cellContentProvider = { entry in
-            AnyView(cellContent(entry))
+            AnyView(cellContent(entry.content, entry.depth, selectedIDs.contains(entry.id), entry.isExpanded))
         }
         context.coordinator.containerView = view
         context.coordinator.updateEntries()
@@ -40,8 +41,10 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
 
         coordinator.generation += 1
         uiView.configuration = configuration
+        let selectedIDs = selectedIDs
+        let cellContent = cellContent
         uiView.cellContentProvider = { entry in
-            AnyView(cellContent(entry))
+            AnyView(cellContent(entry.content, entry.depth, selectedIDs.contains(entry.id), entry.isExpanded))
         }
         coordinator.tree = tree
         coordinator.selectedIDs = selectedIDs

@@ -5,15 +5,16 @@ public func flattenTree<Content: TreeNodeContent>(
     let expanded = expansionState()
     var result: [FlatTreeEntry<Content>] = []
 
-    // Stack entries: (node, depth, parentID, indexInParent)
-    var stack: [(node: TreeNode<Content>, depth: Int, parentID: Content.ID?, indexInParent: Int)] = []
+    // Stack entries: (node, depth, parentID, indexInParent, siblingCount)
+    var stack: [(node: TreeNode<Content>, depth: Int, parentID: Content.ID?, indexInParent: Int, siblingCount: Int)] = []
 
     // Push roots in reverse order so first root is processed first
+    let rootCount = roots.count
     for (index, root) in roots.enumerated().reversed() {
-        stack.append((root, 0, nil, index))
+        stack.append((root, 0, nil, index, rootCount))
     }
 
-    while let (node, depth, parentID, indexInParent) = stack.popLast() {
+    while let (node, depth, parentID, indexInParent, siblingCount) = stack.popLast() {
         let isExpanded = expanded.contains(node.id)
         let hasChildren = !node.children.isEmpty
 
@@ -24,12 +25,14 @@ public func flattenTree<Content: TreeNodeContent>(
             parentID: parentID,
             indexInParent: indexInParent,
             hasChildren: hasChildren,
-            isExpanded: isExpanded && hasChildren
+            isExpanded: isExpanded && hasChildren,
+            isLastChild: indexInParent == siblingCount - 1
         ))
 
         if isExpanded && hasChildren {
+            let childCount = node.children.count
             for (index, child) in node.children.enumerated().reversed() {
-                stack.append((child, depth + 1, node.id, index))
+                stack.append((child, depth + 1, node.id, index, childCount))
             }
         }
     }

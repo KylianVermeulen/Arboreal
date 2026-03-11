@@ -44,6 +44,11 @@ final class HapticController {
         selectionGenerator?.prepare()
     }
 
+    func fireCancel() {
+        guard configuration.dropEnabled else { return }
+        impactGenerator?.impactOccurred(intensity: 0.5)
+    }
+
     func fireError() {
         guard configuration.errorEnabled else { return }
         notificationGenerator?.notificationOccurred(.error)

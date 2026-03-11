@@ -3,8 +3,6 @@ import SwiftUI
 
 @MainActor
 final class TreeNodeCell: UIView {
-    private var hostingController: UIHostingController<AnyView>?
-
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
@@ -16,24 +14,47 @@ final class TreeNodeCell: UIView {
     }
 
     func configure<V: View>(with content: V) {
-        if let hostingController {
-            hostingController.rootView = AnyView(content)
+        // Find or create the content view that supports UIHostingConfiguration
+        let hostView: _UIHostingConfigurationBackingView
+        if let existing = subviews.first(where: { $0 is _UIHostingConfigurationBackingView }) as? _UIHostingConfigurationBackingView {
+            hostView = existing
         } else {
-            let controller = UIHostingController(rootView: AnyView(content))
-            controller.view.backgroundColor = .clear
-            controller.view.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(controller.view)
-            NSLayoutConstraint.activate([
-                controller.view.topAnchor.constraint(equalTo: topAnchor),
-                controller.view.leadingAnchor.constraint(equalTo: leadingAnchor),
-                controller.view.trailingAnchor.constraint(equalTo: trailingAnchor),
-                controller.view.bottomAnchor.constraint(equalTo: bottomAnchor),
-            ])
-            hostingController = controller
+            hostView = _UIHostingConfigurationBackingView(frame: bounds)
+            hostView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            addSubview(hostView)
         }
+        hostView.configuration = UIHostingConfiguration {
+            content
+        }
+        .margins(.all, 0)
     }
 
     func prepareForReuse() {
-        hostingController?.rootView = AnyView(EmptyView())
+        subviews.forEach { ($0 as? _UIHostingConfigurationBackingView)?.configuration = nil }
     }
+}
+
+/// Internal UIView subclass that applies UIHostingConfiguration as its contentConfiguration.
+@MainActor
+private final class _UIHostingConfigurationBackingView: UIView {
+    var configuration: UIContentConfiguration? {
+        didSet {
+            if let configuration {
+                if let existing = contentView {
+                    existing.configuration = configuration
+                } else {
+                    let view = configuration.makeContentView()
+                    view.frame = bounds
+                    view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                    addSubview(view)
+                    contentView = view
+                }
+            } else {
+                contentView?.removeFromSuperview()
+                contentView = nil
+            }
+        }
+    }
+
+    private var contentView: (UIView & UIContentView)?
 }

@@ -18,6 +18,7 @@ struct TreeFlatteningTests {
         #expect(result[0].depth == 0)
         #expect(result[0].parentID == nil)
         #expect(result[0].indexInParent == 0)
+        #expect(result[0].isLastChild == true)
     }
 
     @Test("Collapsed parent hides children")
@@ -63,10 +64,13 @@ struct TreeFlatteningTests {
         #expect(result.count == 3)
         #expect(result[0].id == "A")
         #expect(result[0].indexInParent == 0)
+        #expect(result[0].isLastChild == false)
         #expect(result[1].id == "B")
         #expect(result[1].indexInParent == 1)
+        #expect(result[1].isLastChild == false)
         #expect(result[2].id == "C")
         #expect(result[2].indexInParent == 2)
+        #expect(result[2].isLastChild == true)
     }
 
     @Test("Leaf node marked as not having children")

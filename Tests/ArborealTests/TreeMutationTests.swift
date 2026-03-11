@@ -60,7 +60,7 @@ struct TreeMutationTests {
     @Test("Insert into container")
     func insertInto() {
         let tree = [node("parent", isContainer: true)]
-        let result = insertNodes(into: tree, nodes: [node("child")], at: .into("parent"))
+        let result = insertNodes(into: tree, nodes: [node("child")], at: .intoSection("parent"))
         #expect(result[0].children.count == 1)
         #expect(result[0].children[0].id == "child")
     }
@@ -82,21 +82,21 @@ struct TreeMutationTests {
     @Test("Cannot drop parent into its own child")
     func cyclePreventionDirectChild() {
         let tree = [node("parent", children: [node("child")])]
-        let allowed = canDrop(in: tree, draggedIDs: Set(["parent"]), onto: .into("child"))
+        let allowed = canDrop(in: tree, draggedIDs: Set(["parent"]), onto: .intoSection("child"))
         #expect(allowed == false)
     }
 
     @Test("Cannot drop ancestor into deep descendant")
     func cyclePreventionDeep() {
         let tree = [node("A", children: [node("B", children: [node("C")])])]
-        let allowed = canDrop(in: tree, draggedIDs: Set(["A"]), onto: .into("C"))
+        let allowed = canDrop(in: tree, draggedIDs: Set(["A"]), onto: .intoSection("C"))
         #expect(allowed == false)
     }
 
     @Test("Can drop into unrelated node")
     func dropIntoUnrelated() {
         let tree = [node("A", children: [node("B")]), node("C")]
-        let allowed = canDrop(in: tree, draggedIDs: Set(["B"]), onto: .into("C"))
+        let allowed = canDrop(in: tree, draggedIDs: Set(["B"]), onto: .intoSection("C"))
         #expect(allowed == true)
     }
 

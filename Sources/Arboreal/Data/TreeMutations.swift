@@ -41,7 +41,7 @@ public func insertNodes<Content: TreeNodeContent>(
     case .after(let targetID):
         return insertRelative(into: roots, nodes: nodes, targetID: targetID, position: .after)
 
-    case .into(let parentID):
+    case .intoSection(let parentID):
         return insertIntoContainer(roots: roots, nodes: nodes, parentID: parentID)
     }
 }
@@ -113,7 +113,7 @@ public func canDrop<Content: TreeNodeContent>(
     switch target {
     case .rootLevel:
         return true // Can always drop at root level
-    case .into(let parentID):
+    case .intoSection(let parentID):
         targetParentID = parentID
     case .before(let siblingID), .after(let siblingID):
         targetParentID = findParentID(in: roots, of: siblingID)

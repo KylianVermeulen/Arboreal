@@ -25,4 +25,21 @@ struct TreeNodeTests {
         #expect(tree.children[0].id == "child1")
         #expect(tree.children[1].id == "child2")
     }
+
+    @Test("Leaf node has zero descendants")
+    func leafDescendantCount() {
+        let leaf = node("leaf")
+        #expect(leaf.descendantCount == 0)
+    }
+
+    @Test("Descendant count includes nested children")
+    func nestedDescendantCount() {
+        let tree = node("root", children: [
+            node("A", children: [node("A1"), node("A2")]),
+            node("B"),
+        ])
+        #expect(tree.descendantCount == 4)
+        #expect(tree.children[0].descendantCount == 2)
+        #expect(tree.children[1].descendantCount == 0)
+    }
 }

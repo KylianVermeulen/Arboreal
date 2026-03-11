@@ -7,7 +7,18 @@ final class DropIndicatorLayer: CAShapeLayer {
         case highlight(color: UIColor, cornerRadius: CGFloat)
     }
 
-    func update(for rect: CGRect, style: Style) {
+    func update(for rect: CGRect, style: Style, animated: Bool = true) {
+        if animated {
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(0.15)
+            CATransaction.setAnimationTimingFunction(
+                CAMediaTimingFunction(name: .easeInEaseOut)
+            )
+        } else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+        }
+
         switch style {
         case .line(let color, let width):
             let y = rect.midY
@@ -28,23 +39,36 @@ final class DropIndicatorLayer: CAShapeLayer {
                 endAngle: .pi * 2,
                 clockwise: true
             )
-            let circleLayer = CAShapeLayer()
+            let circleLayer: CAShapeLayer
+            if let existing = sublayers?.first as? CAShapeLayer {
+                circleLayer = existing
+            } else {
+                circleLayer = CAShapeLayer()
+                sublayers?.forEach { $0.removeFromSuperlayer() }
+                addSublayer(circleLayer)
+            }
             circleLayer.path = circlePath.cgPath
             circleLayer.fillColor = color.cgColor
-            sublayers?.forEach { $0.removeFromSuperlayer() }
-            addSublayer(circleLayer)
 
         case .highlight(let color, let cornerRadius):
-            let path = UIBezierPath(roundedRect: rect, cornerRadius: cornerRadius)
-            self.path = path.cgPath
+            let highlightPath = UIBezierPath(roundedRect: rect, cornerRadius: cornerRadius)
+            self.path = highlightPath.cgPath
             strokeColor = nil
             fillColor = color.cgColor
             sublayers?.forEach { $0.removeFromSuperlayer() }
         }
+
+        CATransaction.commit()
     }
 
     func hide() {
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.1)
+        CATransaction.setAnimationTimingFunction(
+            CAMediaTimingFunction(name: .easeOut)
+        )
         path = nil
         sublayers?.forEach { $0.removeFromSuperlayer() }
+        CATransaction.commit()
     }
 }

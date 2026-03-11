@@ -6,4 +6,5 @@ public struct FlatTreeEntry<Content: TreeNodeContent>: Identifiable, Sendable {
     public var indexInParent: Int
     public var hasChildren: Bool
     public var isExpanded: Bool
+    public var isLastChild: Bool
 }

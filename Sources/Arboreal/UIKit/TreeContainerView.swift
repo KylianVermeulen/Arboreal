@@ -16,6 +16,10 @@ where Content: Sendable, Content.ID: Sendable {
     var configuration: TreeDragDropConfiguration<Content> = .init()
     var cellContentProvider: (@MainActor (FlatTreeEntry<Content>) -> AnyView)?
 
+    // MARK: - Public Accessors
+
+    var currentEntries: [FlatTreeEntry<Content>]? { flatEntries.isEmpty ? nil : flatEntries }
+
     // MARK: - Layout Constants
 
     private var contentHeight: CGFloat { CGFloat(flatEntries.count) * configuration.rowHeight }
@@ -49,6 +53,12 @@ where Content: Sendable, Content.ID: Sendable {
     // MARK: - Data Updates
 
     func updateEntries(_ newEntries: [FlatTreeEntry<Content>]) {
+        // Skip layout updates during active drag to avoid visual jitter
+        guard !dragState.isDragging else {
+            flatEntries = newEntries
+            return
+        }
+
         let oldEntries = flatEntries
         flatEntries = newEntries
 
@@ -79,6 +89,9 @@ where Content: Sendable, Content.ID: Sendable {
     }
 
     private func layoutVisibleCells() {
+        // Skip cell recycling during active drag to avoid jitter
+        let isDragging = dragState.isDragging
+
         let visibleRect = CGRect(
             x: 0,
             y: contentOffset.y,
@@ -91,7 +104,9 @@ where Content: Sendable, Content.ID: Sendable {
             flatEntries.count - 1, Int(ceil(visibleRect.maxY / configuration.rowHeight)))
 
         guard firstVisible <= lastVisible else {
-            cellPool.recycleAll(except: [])
+            if !isDragging {
+                cellPool.recycleAll(except: [])
+            }
             return
         }
 
@@ -124,8 +139,10 @@ where Content: Sendable, Content.ID: Sendable {
             }
         }
 
-        // Recycle off-screen cells
-        cellPool.recycleAll(except: visibleKeys)
+        // Recycle off-screen cells (skip during drag)
+        if !isDragging {
+            cellPool.recycleAll(except: visibleKeys)
+        }
     }
 
     // MARK: - Hit Testing
@@ -140,6 +157,14 @@ where Content: Sendable, Content.ID: Sendable {
     func entry(at point: CGPoint) -> FlatTreeEntry<Content>? {
         guard let index = entryIndex(at: point) else { return nil }
         return flatEntries[index]
+    }
+
+    // MARK: - Cell Access
+
+    func cellForEntry(at index: Int) -> TreeNodeCell? {
+        guard index >= 0, index < flatEntries.count else { return nil }
+        let key = AnyHashable(flatEntries[index].id)
+        return cellPool.cell(for: key)
     }
 
     // MARK: - Drop Target Resolution
@@ -162,7 +187,7 @@ where Content: Sendable, Content.ID: Sendable {
             } else if fraction > 0.75 {
                 return .after(entry.id)
             } else {
-                return .into(entry.id)
+                return .intoSection(entry.id)
             }
         } else {
             // For leaves: top 50% = before, bottom 50% = after
@@ -172,6 +197,37 @@ where Content: Sendable, Content.ID: Sendable {
                 return .after(entry.id)
             }
         }
+    }
+
+    // MARK: - Frame Calculations
+
+    func frameForDropTarget(_ target: DropTarget<Content>) -> CGRect {
+        switch target {
+        case .before(let id):
+            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
+                let y = CGFloat(index) * configuration.rowHeight
+                return CGRect(x: 0, y: y, width: bounds.width, height: configuration.rowHeight)
+            }
+        case .after(let id):
+            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
+                let y = CGFloat(index) * configuration.rowHeight
+                return CGRect(x: 0, y: y, width: bounds.width, height: configuration.rowHeight)
+            }
+        case .intoSection(let id):
+            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
+                let indent = CGFloat(flatEntries[index].depth) * configuration.indentationWidth
+                return CGRect(
+                    x: indent,
+                    y: CGFloat(index) * configuration.rowHeight,
+                    width: bounds.width - indent,
+                    height: configuration.rowHeight
+                )
+            }
+        case .rootLevel(let index):
+            let y = CGFloat(min(index, flatEntries.count)) * configuration.rowHeight
+            return CGRect(x: 0, y: y, width: bounds.width, height: configuration.rowHeight)
+        }
+        return CGRect(x: 0, y: 0, width: bounds.width, height: configuration.rowHeight)
     }
 
     // MARK: - Drop Indicator
@@ -195,7 +251,7 @@ where Content: Sendable, Content.ID: Sendable {
                 let rect = CGRect(x: 0, y: y - 1, width: bounds.width, height: 2)
                 dropIndicatorLayer.update(for: rect, style: .line(color: .tintColor, width: 2))
             }
-        case .into(let id):
+        case .intoSection(let id):
             if let index = flatEntries.firstIndex(where: { $0.id == id }) {
                 let indent = CGFloat(flatEntries[index].depth) * configuration.indentationWidth
                 let rect = CGRect(

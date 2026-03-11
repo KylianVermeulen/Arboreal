@@ -42,6 +42,10 @@ final class ViewReusePool<Cell: UIView> {
         inUse.removeAll()
     }
 
+    func cell(for key: AnyHashable) -> Cell? {
+        inUse[key]
+    }
+
     var activeKeys: Set<AnyHashable> {
         Set(inUse.keys)
     }
