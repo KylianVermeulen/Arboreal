@@ -29,6 +29,7 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
             AnyView(cellContent(entry.content, entry.depth, selectedIDs.contains(entry.id), entry.isExpanded))
         }
         context.coordinator.containerView = view
+        view.installInteractions(dragDelegate: context.coordinator, dropDelegate: context.coordinator)
         context.coordinator.updateEntries()
         return view
     }

@@ -39,13 +39,15 @@ where Content: Sendable, Content.ID: Sendable {
     private func setup() {
         layer.addSublayer(dropIndicatorLayer)
         alwaysBounceVertical = true
+    }
 
-        if configuration.dragEnabled {
-            let dragInteraction = UIDragInteraction(delegate: self as! any UIDragInteractionDelegate)
+    func installInteractions(dragDelegate: (any UIDragInteractionDelegate)?, dropDelegate: (any UIDropInteractionDelegate)?) {
+        if configuration.dragEnabled, let dragDelegate {
+            let dragInteraction = UIDragInteraction(delegate: dragDelegate)
             addInteraction(dragInteraction)
         }
-        if configuration.dropEnabled {
-            let dropInteraction = UIDropInteraction(delegate: self as! any UIDropInteractionDelegate)
+        if configuration.dropEnabled, let dropDelegate {
+            let dropInteraction = UIDropInteraction(delegate: dropDelegate)
             addInteraction(dropInteraction)
         }
     }
