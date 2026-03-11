@@ -124,6 +124,10 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         liftingCell = nil
 
         containerView?.transitionDragState(to: .idle)
+
+        // Force layout refresh to ensure all cells are visible after drag cancel
+        updateEntries()
+
         hapticController.fireCancel()
         hapticController.tearDown()
         cancelAutoExpandTimer()

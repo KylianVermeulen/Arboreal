@@ -130,6 +130,11 @@ where Content: Sendable, Content.ID: Sendable {
                 height: configuration.rowHeight
             )
 
+            // Reset visual state before setting frame — UIKit frame is
+            // undefined when transform != .identity.
+            cell.transform = .identity
+            cell.alpha = 1
+            cell.isHidden = false
             cell.frame = cellFrame
 
             if cell.superview == nil {
