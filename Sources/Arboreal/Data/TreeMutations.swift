@@ -108,6 +108,14 @@ public func canDrop<Content: TreeNodeContent>(
     draggedIDs: Set<Content.ID>,
     onto target: DropTarget<Content>
 ) -> Bool {
+    // Reject dropping before/after/into the dragged item itself
+    switch target {
+    case .before(let id), .after(let id), .intoSection(let id):
+        if draggedIDs.contains(id) { return false }
+    case .rootLevel:
+        break
+    }
+
     // Get the target parent ID
     let targetParentID: Content.ID?
     switch target {

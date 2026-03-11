@@ -106,4 +106,25 @@ struct TreeMutationTests {
         let allowed = canDrop(in: tree, draggedIDs: Set(["A"]), onto: .rootLevel(index: 0))
         #expect(allowed == true)
     }
+
+    @Test("Cannot drop node before itself")
+    func cannotDropBeforeSelf() {
+        let tree = [node("A"), node("B"), node("C")]
+        let allowed = canDrop(in: tree, draggedIDs: Set(["B"]), onto: .before("B"))
+        #expect(allowed == false)
+    }
+
+    @Test("Cannot drop node after itself")
+    func cannotDropAfterSelf() {
+        let tree = [node("A"), node("B"), node("C")]
+        let allowed = canDrop(in: tree, draggedIDs: Set(["B"]), onto: .after("B"))
+        #expect(allowed == false)
+    }
+
+    @Test("Cannot drop section into itself")
+    func cannotDropSectionIntoSelf() {
+        let tree = [node("A", isContainer: true, children: [node("B")])]
+        let allowed = canDrop(in: tree, draggedIDs: Set(["A"]), onto: .intoSection("A"))
+        #expect(allowed == false)
+    }
 }
