@@ -5,6 +5,7 @@ final class DropIndicatorLayer: CAShapeLayer {
     enum Style {
         case line(color: UIColor, width: CGFloat)
         case highlight(color: UIColor, cornerRadius: CGFloat)
+        case preview(fillColor: UIColor, borderColor: UIColor?, borderWidth: CGFloat, cornerRadius: CGFloat)
     }
 
     func update(for rect: CGRect, style: Style, animated: Bool = true) {
@@ -55,6 +56,15 @@ final class DropIndicatorLayer: CAShapeLayer {
             self.path = highlightPath.cgPath
             strokeColor = nil
             fillColor = color.cgColor
+            lineWidth = 0
+            sublayers?.forEach { $0.removeFromSuperlayer() }
+
+        case .preview(let fill, let border, let borderWidth, let cornerRadius):
+            let previewPath = UIBezierPath(roundedRect: rect, cornerRadius: cornerRadius)
+            self.path = previewPath.cgPath
+            fillColor = fill.cgColor
+            strokeColor = border?.cgColor
+            lineWidth = border != nil ? borderWidth : 0
             sublayers?.forEach { $0.removeFromSuperlayer() }
         }
 

@@ -149,10 +149,10 @@ extension TreeDragDropConfiguration where Content == OutlineItem {
         var config = TreeDragDropConfiguration()
         config.rowHeight = 48
         config.indentationWidth = 24
-        config.dropIndicatorStyle = .themed(DropIndicatorTheme(
-            lineColor: .orange,
-            lineWidth: 2.5,
-            highlightColor: Color.orange.opacity(0.12),
+        config.dropIndicatorStyle = .preview(DropPreviewTheme(
+            fillColor: Color.blue.opacity(0.12),
+            borderColor: Color.blue.opacity(0.3),
+            borderWidth: 1,
             cornerRadius: 10
         ))
         return config

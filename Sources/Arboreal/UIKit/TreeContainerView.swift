@@ -10,6 +10,7 @@ where Content: Sendable, Content.ID: Sendable {
     private var cellPool = ViewReusePool<TreeNodeCell>(factory: { TreeNodeCell() })
     private var dropIndicatorLayer = DropIndicatorLayer()
     private(set) var dragState: DragState<Content> = .idle
+    private var activePreviewLayout: PreviewLayout<Content>?
 
     // MARK: - Configuration
 
@@ -91,6 +92,12 @@ where Content: Sendable, Content.ID: Sendable {
     }
 
     private func layoutVisibleCells() {
+        // During active drag with preview layout, use preview positions
+        if let preview = activePreviewLayout, dragState.isDragging {
+            layoutVisibleCellsWithPreview(preview)
+            return
+        }
+
         // Skip cell recycling during active drag to avoid jitter
         let isDragging = dragState.isDragging
 
@@ -149,6 +156,48 @@ where Content: Sendable, Content.ID: Sendable {
         // Recycle off-screen cells (skip during drag)
         if !isDragging {
             cellPool.recycleAll(except: visibleKeys)
+        }
+    }
+
+    private func layoutVisibleCellsWithPreview(_ preview: PreviewLayout<Content>) {
+        let provider = cellContentProvider
+
+        for entry in flatEntries {
+            let key = AnyHashable(entry.id)
+
+            if preview.draggedIDs.contains(entry.id) {
+                cellPool.cell(for: key)?.isHidden = true
+                continue
+            }
+
+            guard let yPosition = preview.entryYPositions[entry.id] else { continue }
+
+            // Check if within visible rect (with buffer)
+            let visibleMinY = contentOffset.y - configuration.rowHeight
+            let visibleMaxY = contentOffset.y + bounds.height + configuration.rowHeight
+            guard yPosition + configuration.rowHeight > visibleMinY,
+                  yPosition < visibleMaxY else { continue }
+
+            let cell = cellPool.dequeue(for: key)
+            let indent = CGFloat(entry.depth) * configuration.indentationWidth
+
+            cell.transform = .identity
+            cell.alpha = 1
+            cell.isHidden = false
+            cell.frame = CGRect(
+                x: indent,
+                y: yPosition,
+                width: bounds.width - indent,
+                height: configuration.rowHeight
+            )
+
+            if cell.superview == nil {
+                addSubview(cell)
+            }
+
+            if let provider {
+                cell.configure(with: provider(entry))
+            }
         }
     }
 
@@ -241,10 +290,24 @@ where Content: Sendable, Content.ID: Sendable {
 
     func updateDropIndicator(for target: DropTarget<Content>?) {
         guard let target else {
+            clearPreviewLayout()
             dropIndicatorLayer.hide()
             return
         }
 
+        switch configuration.dropIndicatorStyle {
+        case .default:
+            updateDropIndicatorDefault(for: target)
+        case .themed(let theme):
+            updateDropIndicatorThemed(for: target, theme: theme)
+        case .preview(let theme):
+            updateDropIndicatorPreview(for: target, theme: theme)
+        case .custom:
+            dropIndicatorLayer.hide()
+        }
+    }
+
+    private func updateDropIndicatorDefault(for target: DropTarget<Content>) {
         switch target {
         case .before(let id):
             if let index = flatEntries.firstIndex(where: { $0.id == id }) {
@@ -275,6 +338,125 @@ where Content: Sendable, Content.ID: Sendable {
             let y = CGFloat(min(index, flatEntries.count)) * configuration.rowHeight
             let rect = CGRect(x: 0, y: y - 1, width: bounds.width, height: 2)
             dropIndicatorLayer.update(for: rect, style: .line(color: .tintColor, width: 2))
+        }
+    }
+
+    private func updateDropIndicatorThemed(for target: DropTarget<Content>, theme: DropIndicatorTheme) {
+        let lineColor = UIColor(theme.lineColor)
+        let lineWidth = theme.lineWidth
+        let highlightColor = UIColor(theme.highlightColor)
+        let cornerRadius = theme.cornerRadius
+
+        switch target {
+        case .before(let id):
+            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
+                let y = CGFloat(index) * configuration.rowHeight
+                let rect = CGRect(x: 0, y: y - lineWidth / 2, width: bounds.width, height: lineWidth)
+                dropIndicatorLayer.update(for: rect, style: .line(color: lineColor, width: lineWidth))
+            }
+        case .after(let id):
+            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
+                let y = CGFloat(index + 1) * configuration.rowHeight
+                let rect = CGRect(x: 0, y: y - lineWidth / 2, width: bounds.width, height: lineWidth)
+                dropIndicatorLayer.update(for: rect, style: .line(color: lineColor, width: lineWidth))
+            }
+        case .intoSection(let id):
+            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
+                let indent = CGFloat(flatEntries[index].depth) * configuration.indentationWidth
+                let rect = CGRect(
+                    x: indent,
+                    y: CGFloat(index) * configuration.rowHeight,
+                    width: bounds.width - indent,
+                    height: configuration.rowHeight
+                )
+                dropIndicatorLayer.update(
+                    for: rect,
+                    style: .highlight(color: highlightColor, cornerRadius: cornerRadius))
+            }
+        case .rootLevel(let index):
+            let y = CGFloat(min(index, flatEntries.count)) * configuration.rowHeight
+            let rect = CGRect(x: 0, y: y - lineWidth / 2, width: bounds.width, height: lineWidth)
+            dropIndicatorLayer.update(for: rect, style: .line(color: lineColor, width: lineWidth))
+        }
+    }
+
+    private func updateDropIndicatorPreview(for target: DropTarget<Content>, theme: DropPreviewTheme) {
+        guard let payload = dragState.payload else { return }
+
+        let layout = Arboreal.computePreviewLayout(
+            entries: flatEntries,
+            target: target,
+            payload: payload,
+            rowHeight: configuration.rowHeight
+        )
+        activePreviewLayout = layout
+
+        // Animate cells to their preview positions
+        UIView.animate(withDuration: 0.25, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
+            self.applyPreviewLayout(layout)
+        }
+
+        // Show the preview box in the gap
+        let rect = CGRect(x: 0, y: layout.gapY, width: bounds.width, height: layout.gapHeight)
+        dropIndicatorLayer.update(
+            for: rect,
+            style: .preview(
+                fillColor: UIColor(theme.fillColor),
+                borderColor: theme.borderColor.map { UIColor($0) },
+                borderWidth: theme.borderWidth,
+                cornerRadius: theme.cornerRadius
+            )
+        )
+    }
+
+    private func applyPreviewLayout(_ layout: PreviewLayout<Content>) {
+        let rowHeight = configuration.rowHeight
+
+        for (index, entry) in flatEntries.enumerated() {
+            let key = AnyHashable(entry.id)
+            guard let cell = cellPool.cell(for: key) else { continue }
+
+            if layout.draggedIDs.contains(entry.id) {
+                cell.isHidden = true
+                continue
+            }
+
+            guard let yPosition = layout.entryYPositions[entry.id] else { continue }
+
+            let indent = CGFloat(entry.depth) * configuration.indentationWidth
+            cell.transform = .identity
+            cell.frame = CGRect(
+                x: indent,
+                y: yPosition,
+                width: bounds.width - indent,
+                height: rowHeight
+            )
+            cell.isHidden = false
+            cell.alpha = 1
+        }
+    }
+
+    private func clearPreviewLayout() {
+        guard activePreviewLayout != nil else { return }
+        activePreviewLayout = nil
+
+        // Restore all cells to normal positions (including previously hidden dragged cells)
+        UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
+            for (index, entry) in self.flatEntries.enumerated() {
+                let key = AnyHashable(entry.id)
+                guard let cell = self.cellPool.cell(for: key) else { continue }
+
+                let indent = CGFloat(entry.depth) * self.configuration.indentationWidth
+                cell.transform = .identity
+                cell.isHidden = false
+                cell.alpha = 1
+                cell.frame = CGRect(
+                    x: indent,
+                    y: CGFloat(index) * self.configuration.rowHeight,
+                    width: self.bounds.width - indent,
+                    height: self.configuration.rowHeight
+                )
+            }
         }
     }
 

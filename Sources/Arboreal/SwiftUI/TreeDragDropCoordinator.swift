@@ -20,6 +20,11 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
     private var view: TreeDragDropView<Content, CellContent>
     private weak var liftingCell: UIView?
 
+    // Floating drag view (follows finger)
+    private var floatingDragView: UIView?
+    private var dragTouchOffset: CGPoint = .zero
+    private var originalCellFrameInWindow: CGRect = .zero
+
     // MARK: - Init
 
     init(view: TreeDragDropView<Content, CellContent>) {
@@ -77,14 +82,14 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
     public func dragInteraction(_ interaction: UIDragInteraction, previewForLifting item: UIDragItem, session: any UIDragSession) -> UITargetedDragPreview? {
         guard let containerView else { return nil }
         let location = session.location(in: containerView)
-        guard let entry = containerView.entry(at: location) else { return nil }
 
         // Track the cell for lift animation
         if let index = containerView.entryIndex(at: location) {
             liftingCell = containerView.cellForEntry(at: index)
         }
 
-        if let customPreview = view.configuration.dragPreview {
+        if let customPreview = view.configuration.dragPreview,
+           let entry = containerView.entry(at: location) {
             let previewView = customPreview(entry.content, entry.depth)
             let hostingController = UIHostingController(rootView: previewView)
             hostingController.view.sizeToFit()
@@ -93,6 +98,19 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             return UITargetedDragPreview(view: hostingController.view, parameters: UIDragPreviewParameters(), target: target)
         }
 
+        // Create floating snapshot and return invisible system preview
+        if let cell = liftingCell, let window = containerView.window {
+            createFloatingDragView(for: cell, in: window, touchLocation: session.location(in: window))
+        }
+
+//        // Return a 1x1 invisible preview to suppress UIKit's default
+//        let invisible = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+//        invisible.backgroundColor = .clear
+//        let params = UIDragPreviewParameters()
+//        params.backgroundColor = .clear
+//        let center = session.location(in: containerView)
+//        let target = UIDragPreviewTarget(container: containerView, center: center)
+//        return UITargetedDragPreview(view: invisible, parameters: params, target: target)
         return nil
     }
 
@@ -103,12 +121,8 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             return
         }
 
-        // Default lift: scale up slightly and fade
+        // Hide the original cell; the floating view is now the visual representation
         let cell = liftingCell
-        animator.addAnimations {
-            cell?.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
-            cell?.alpha = 0.4
-        }
         animator.addCompletion { position in
             if position == .end {
                 cell?.isHidden = true
@@ -117,6 +131,17 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
     }
 
     public func dragInteraction(_ interaction: UIDragInteraction, sessionDidEnd session: any UIDragSession) {
+        // Animate floating view back to original position, then remove
+        if let floating = floatingDragView {
+            UIView.animate(withDuration: 0.25, delay: 0, options: .curveEaseInOut) {
+                floating.frame = self.originalCellFrameInWindow
+                floating.layer.shadowOpacity = 0
+            } completion: { _ in
+                floating.removeFromSuperview()
+            }
+            floatingDragView = nil
+        }
+
         // Restore lifting cell
         liftingCell?.isHidden = false
         liftingCell?.transform = .identity
@@ -156,6 +181,15 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
 
         let location = session.location(in: containerView)
         let target = containerView.resolveDropTarget(at: location)
+
+        // Update floating view position
+        if let floating = floatingDragView, let window = containerView.window {
+            let touchInWindow = session.location(in: window)
+            floating.center = CGPoint(
+                x: touchInWindow.x + dragTouchOffset.x,
+                y: touchInWindow.y + dragTouchOffset.y
+            )
+        }
 
         guard let target,
               let dragItem = session.items.first,
@@ -255,6 +289,9 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         view.$tree.wrappedValue = newTree
         tree = newTree
 
+        // Remove floating drag view
+        removeFloatingDragView()
+
         // Restore lifting cell
         liftingCell?.isHidden = false
         liftingCell?.transform = .identity
@@ -289,6 +326,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
     }
 
     public func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: any UIDropSession) {
+        removeFloatingDragView()
         if let existingPayload = containerView?.dragState.payload {
             containerView?.transitionDragState(to: .dragging(payload: existingPayload, currentTarget: nil))
         } else {
@@ -298,9 +336,46 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
     }
 
     public func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: any UIDropSession) {
+        removeFloatingDragView()
         containerView?.transitionDragState(to: .idle)
         cancelAutoExpandTimer()
         hapticController.tearDown()
+    }
+
+    // MARK: - Floating Drag View
+
+    private func createFloatingDragView(for cell: UIView, in window: UIWindow, touchLocation: CGPoint) {
+        let cellFrameInWindow = cell.convert(cell.bounds, to: window)
+        originalCellFrameInWindow = cellFrameInWindow
+
+        // Compute offset from touch to cell center so the cell stays anchored to the finger
+        dragTouchOffset = CGPoint(
+            x: cellFrameInWindow.midX - touchLocation.x,
+            y: cellFrameInWindow.midY - touchLocation.y
+        )
+
+        let snapshot = cell.snapshotView(afterScreenUpdates: false) ?? UIView()
+        snapshot.frame = cellFrameInWindow
+        snapshot.isUserInteractionEnabled = false
+
+        // Lifted appearance
+        snapshot.layer.shadowColor = UIColor.black.cgColor
+        snapshot.layer.shadowOpacity = 0.2
+        snapshot.layer.shadowRadius = 8
+        snapshot.layer.shadowOffset = CGSize(width: 0, height: 4)
+
+        window.addSubview(snapshot)
+        floatingDragView = snapshot
+
+        // Slight scale-up on creation
+        UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) {
+            snapshot.transform = CGAffineTransform(scaleX: 1.03, y: 1.03)
+        }
+    }
+
+    private func removeFloatingDragView() {
+        floatingDragView?.removeFromSuperview()
+        floatingDragView = nil
     }
 
     // MARK: - Helpers
