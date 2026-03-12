@@ -171,7 +171,7 @@ private func findParentID<Content: TreeNodeContent>(
 }
 
 /// Check if `possibleDescendant` is a descendant of the node with `ancestorID`.
-private func isDescendant<Content: TreeNodeContent>(
+func isDescendant<Content: TreeNodeContent>(
     _ possibleDescendant: Content.ID,
     of ancestorID: Content.ID,
     in roots: [TreeNode<Content>]
@@ -180,7 +180,7 @@ private func isDescendant<Content: TreeNodeContent>(
     return containsNode(id: possibleDescendant, in: ancestor.children)
 }
 
-private func findNode<Content: TreeNodeContent>(
+func findNode<Content: TreeNodeContent>(
     id: Content.ID,
     in nodes: [TreeNode<Content>]
 ) -> TreeNode<Content>? {
@@ -191,7 +191,7 @@ private func findNode<Content: TreeNodeContent>(
     return nil
 }
 
-private func containsNode<Content: TreeNodeContent>(
+func containsNode<Content: TreeNodeContent>(
     id: Content.ID,
     in nodes: [TreeNode<Content>]
 ) -> Bool {

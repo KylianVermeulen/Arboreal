@@ -49,7 +49,20 @@ func computePreviewLayout<Content: TreeNodeContent>(
     let insertionIndex: Int
     switch target {
     case .before(let id):
-        insertionIndex = nonDragged.firstIndex(where: { $0.id == id }) ?? nonDragged.count
+        if let idx = nonDragged.firstIndex(where: { $0.id == id }) {
+            insertionIndex = idx
+        } else if draggedIDs.contains(id),
+                  let originalIdx = entries.firstIndex(where: { $0.id == id }) {
+            // The target is itself being dragged — find the first non-dragged
+            // entry at or after the original position.
+            let afterOriginal = nonDragged.firstIndex(where: { entry in
+                guard let entryIdx = entries.firstIndex(where: { $0.id == entry.id }) else { return false }
+                return entryIdx >= originalIdx
+            })
+            insertionIndex = afterOriginal ?? nonDragged.count
+        } else {
+            insertionIndex = nonDragged.count
+        }
 
     case .after(let id):
         if let idx = nonDragged.firstIndex(where: { $0.id == id }) {
@@ -60,6 +73,20 @@ func computePreviewLayout<Content: TreeNodeContent>(
                 end += 1
             }
             insertionIndex = end
+        } else if draggedIDs.contains(id),
+                  let originalIdx = entries.firstIndex(where: { $0.id == id }) {
+            // The target is itself being dragged — find insertion after its
+            // subtree in the original list, then map to non-dragged index.
+            let baseDepth = entries[originalIdx].depth
+            var end = originalIdx + 1
+            while end < entries.count, entries[end].depth > baseDepth {
+                end += 1
+            }
+            let afterOriginal = nonDragged.firstIndex(where: { entry in
+                guard let entryIdx = entries.firstIndex(where: { $0.id == entry.id }) else { return false }
+                return entryIdx >= end
+            })
+            insertionIndex = afterOriginal ?? nonDragged.count
         } else {
             insertionIndex = nonDragged.count
         }

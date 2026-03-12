@@ -4,25 +4,13 @@ import Arboreal
 // MARK: - Content Model
 
 enum OutlineItem: TreeNodeContent {
-    case section(id: UUID, title: String, icon: String)
-    case task(id: UUID, title: String, priority: Priority, isCompleted: Bool)
-
-    enum Priority: String, Hashable, Sendable, CaseIterable {
-        case low, medium, high
-
-        var color: Color {
-            switch self {
-            case .low: .green
-            case .medium: .orange
-            case .high: .red
-            }
-        }
-    }
+    case section(id: UUID, title: String)
+    case task(id: UUID, title: String, isCompleted: Bool)
 
     var id: UUID {
         switch self {
-        case .section(let id, _, _): id
-        case .task(let id, _, _, _): id
+        case .section(let id, _): id
+        case .task(let id, _, _): id
         }
     }
 
@@ -35,57 +23,54 @@ enum OutlineItem: TreeNodeContent {
 
 struct SectionRowView: View {
     let title: String
-    let icon: String
-    let isExpanded: Bool
-    let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
-
-            Image(systemName: icon)
-                .font(.body)
-                .foregroundStyle(.tint)
-
-            Text(title)
-                .font(.headline)
-
+        VStack(alignment: .leading, spacing: 0) {
             Spacer()
+
+            HStack {
+                Text(title)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Color.accentColor)
+
+                Spacer()
+
+                Image(systemName: "ellipsis")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 6)
+
+            Rectangle()
+                .fill(Color.accentColor.opacity(0.4))
+                .frame(height: 1)
+                .padding(.horizontal, 16)
         }
-        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
         .contentShape(Rectangle())
     }
 }
 
 struct TaskRowView: View {
     let title: String
-    let priority: OutlineItem.Priority
     let isCompleted: Bool
-    let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isCompleted ? .green : .secondary)
+        HStack(spacing: 12) {
+            Image(systemName: isCompleted ? "checkmark.square.fill" : "square")
+                .font(.body)
+                .foregroundStyle(isCompleted ? Color.accentColor : Color(.systemGray3))
 
             Text(title)
-                .strikethrough(isCompleted)
+                .font(.body)
                 .foregroundStyle(isCompleted ? .secondary : .primary)
+                .lineLimit(1)
 
             Spacer()
-
-            Circle()
-                .fill(priority.color)
-                .frame(width: 8, height: 8)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
         .contentShape(Rectangle())
     }
 }
@@ -98,47 +83,43 @@ struct ContentView: View {
     @State private var expansionState = ExpansionState<UUID>()
 
     var body: some View {
-        NavigationStack {
-            TreeDragDropView(
-                tree: $tree,
-                selectedIDs: $selectedIDs,
-                expansionState: expansionState,
-                configuration: .exampleConfiguration(tree: tree)
-            ) { item, depth, isSelected, isExpanded in
-                switch item {
-                case .section(let id, let title, let icon):
-                    SectionRowView(
-                        title: title,
-                        icon: icon,
-                        isExpanded: isExpanded,
-                        isSelected: isSelected
-                    )
-                    .onTapGesture {
-                        expansionState.toggle(id)
-                    }
+        TreeDragDropView(
+            tree: $tree,
+            selectedIDs: $selectedIDs,
+            expansionState: expansionState,
+            configuration: .exampleConfiguration(tree: tree)
+        ) { item, depth, isSelected, isExpanded in
+            switch item {
+            case .section(_, let title):
+                SectionRowView(title: title)
 
-                case .task(let id, let title, let priority, let isCompleted):
-                    TaskRowView(
-                        title: title,
-                        priority: priority,
-                        isCompleted: isCompleted,
-                        isSelected: isSelected
-                    )
-                    .onTapGesture {
-                        if selectedIDs.contains(id) {
-                            selectedIDs.remove(id)
-                        } else {
-                            selectedIDs.insert(id)
-                        }
-                    }
+            case .task(let id, let title, let isCompleted):
+                TaskRowView(
+                    title: title,
+                    isCompleted: isCompleted
+                )
+                .onTapGesture {
+                    toggleCompletion(id: id)
                 }
             }
-            .navigationTitle("Project Plan")
-            .toolbarTitleDisplayMode(.large)
         }
+        .background(Color.black)
         .onAppear {
             expansionState.expandAll(tree.map(\.id))
         }
+    }
+
+    private func toggleCompletion(id: UUID) {
+        func toggle(in nodes: inout [TreeNode<OutlineItem>]) {
+            for i in nodes.indices {
+                if case .task(let taskID, let title, let completed) = nodes[i].content, taskID == id {
+                    nodes[i] = TreeNode(content: .task(id: taskID, title: title, isCompleted: !completed), children: [])
+                    return
+                }
+                toggle(in: &nodes[i].children)
+            }
+        }
+        toggle(in: &tree)
     }
 }
 
@@ -147,16 +128,16 @@ struct ContentView: View {
 extension TreeDragDropConfiguration where Content == OutlineItem {
     static func exampleConfiguration(tree: [TreeNode<OutlineItem>]) -> TreeDragDropConfiguration {
         var config = TreeDragDropConfiguration()
-        config.rowHeight = 48
-        config.indentationWidth = 24
+        config.rowHeight = 44
+        config.indentationWidth = 0
         config.dropIndicatorStyle = .preview(DropPreviewTheme(
-            fillColor: Color.blue.opacity(0.12),
-            borderColor: Color.blue.opacity(0.3),
-            borderWidth: 1,
-            cornerRadius: 10
+            fillColor: Color(red: 0x16/255.0, green: 0x20/255.0, blue: 0x2C/255.0),
+            borderColor: nil,
+            borderWidth: 0,
+            cornerRadius: 10,
+            horizontalPadding: 16
         ))
         config.canDropIntoSection = { _, payload in
-            // Prevent sections from being nested inside other sections
             func isSection(_ id: UUID) -> Bool {
                 func find(in nodes: [TreeNode<OutlineItem>]) -> Bool {
                     for node in nodes {
@@ -168,9 +149,7 @@ extension TreeDragDropConfiguration where Content == OutlineItem {
                 return find(in: tree)
             }
             switch payload {
-            case .singleItem(let id):
-                return !isSection(id)
-            case .section(let id):
+            case .singleItem(let id), .section(let id):
                 return !isSection(id)
             case .multipleItems(let ids):
                 return !ids.contains(where: { isSection($0) })
@@ -185,27 +164,34 @@ extension TreeDragDropConfiguration where Content == OutlineItem {
 private func makeSampleTree() -> [TreeNode<OutlineItem>] {
     [
         TreeNode(
-            content: .section(id: UUID(), title: "Design", icon: "paintbrush"),
+            content: .section(id: UUID(), title: "Reflect on Core Values and Beliefs"),
             children: [
-                TreeNode(content: .task(id: UUID(), title: "Create wireframes", priority: .high, isCompleted: true)),
-                TreeNode(content: .task(id: UUID(), title: "Design component library", priority: .medium, isCompleted: false)),
-                TreeNode(content: .task(id: UUID(), title: "Review color palette", priority: .low, isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "Write down my core values and what they mean to me", isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "Reflect on the qualities I admire in others and the principles I live by", isCompleted: false)),
             ]
         ),
         TreeNode(
-            content: .section(id: UUID(), title: "Development", icon: "chevron.left.forwardslash.chevron.right"),
+            content: .section(id: UUID(), title: "Identify Key Strengths and Passions"),
             children: [
-                TreeNode(content: .task(id: UUID(), title: "Set up project structure", priority: .high, isCompleted: true)),
-                TreeNode(content: .task(id: UUID(), title: "Implement drag and drop", priority: .high, isCompleted: false)),
-                TreeNode(content: .task(id: UUID(), title: "Write unit tests", priority: .medium, isCompleted: false)),
-                TreeNode(content: .task(id: UUID(), title: "Performance profiling", priority: .low, isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "List my strengths and what I'm most passionate about", isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "Reflect on past successes and moments when I felt most fulfilled", isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "Think about how I want to use these strengths to contribute", isCompleted: false)),
             ]
         ),
         TreeNode(
-            content: .section(id: UUID(), title: "Launch", icon: "paperplane"),
+            content: .section(id: UUID(), title: "Define Purpose and Goals"),
             children: [
-                TreeNode(content: .task(id: UUID(), title: "Beta testing", priority: .medium, isCompleted: false)),
-                TreeNode(content: .task(id: UUID(), title: "App Store submission", priority: .high, isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "Clarify what drives me and what I want to achieve in life", isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "Write down the key goals that align with my values, strengths, and passions", isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "Visualize my ideal future and the steps I need to take to get there", isCompleted: false)),
+            ]
+        ),
+        TreeNode(
+            content: .section(id: UUID(), title: "Draft and Refine Mission Statement"),
+            children: [
+                TreeNode(content: .task(id: UUID(), title: "Write a first draft of my personal mission statement", isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "Review and revise the statement to ensure it aligns with my values and goals", isCompleted: false)),
+                TreeNode(content: .task(id: UUID(), title: "Ask for feedback from trusted friends or mentors to refine it further", isCompleted: false)),
             ]
         ),
     ]
@@ -213,4 +199,5 @@ private func makeSampleTree() -> [TreeNode<OutlineItem>] {
 
 #Preview {
     ContentView()
+        .preferredColorScheme(.dark)
 }

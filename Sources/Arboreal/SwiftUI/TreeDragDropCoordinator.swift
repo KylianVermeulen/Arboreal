@@ -65,7 +65,16 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             payload = .singleItem(entry.id)
         }
 
-        containerView.transitionDragState(to: .lifting(itemID: entry.id))
+        // Snapshot the cell and hide it before preview layout kicks in
+        if let index = containerView.entryIndex(at: location) {
+            liftingCell = containerView.cellForEntry(at: index)
+        }
+        if let cell = liftingCell, let window = containerView.window {
+            createFloatingDragView(for: cell, in: window, touchLocation: session.location(in: window))
+            cell.isHidden = true
+        }
+
+        containerView.transitionDragState(to: .lifting(itemID: entry.id, payload: payload))
 
         let itemProvider = NSItemProvider()
         let dragItem = UIDragItem(itemProvider: itemProvider)
@@ -83,11 +92,6 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         guard let containerView else { return nil }
         let location = session.location(in: containerView)
 
-        // Track the cell for lift animation
-        if let index = containerView.entryIndex(at: location) {
-            liftingCell = containerView.cellForEntry(at: index)
-        }
-
         if let customPreview = view.configuration.dragPreview,
            let entry = containerView.entry(at: location) {
             let previewView = customPreview(entry.content, entry.depth)
@@ -98,11 +102,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             return UITargetedDragPreview(view: hostingController.view, parameters: UIDragPreviewParameters(), target: target)
         }
 
-        // Create floating snapshot and return invisible system preview
-        if let cell = liftingCell, let window = containerView.window {
-            createFloatingDragView(for: cell, in: window, touchLocation: session.location(in: window))
-        }
-
+        // Floating view was already created in itemsForBeginning
         return nil
     }
 
@@ -113,19 +113,27 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             return
         }
 
-        // Hide the original cell; the floating view is now the visual representation
-        let cell = liftingCell
+        // Hide the original cell immediately; the floating view is the visual representation
+        liftingCell?.isHidden = true
+
+        // If the lift is canceled (released without dragging), clean up the floating view
         animator.addCompletion { position in
-            if position == .end {
-                cell?.isHidden = true
-            }
+            guard position != .end else { return }
+            self.removeFloatingDragView()
+            self.liftingCell?.isHidden = false
+            self.liftingCell?.transform = .identity
+            self.liftingCell?.alpha = 1
+            self.liftingCell = nil
+            self.containerView?.transitionDragState(to: .idle)
+            self.updateEntries()
         }
     }
 
-    public func dragInteraction(_ interaction: UIDragInteraction, sessionDidEnd session: any UIDragSession) {
+    public func dragInteraction(_ interaction: UIDragInteraction, session: any UIDragSession, didEndWith operation: UIDropOperation) {
         // Animate floating view back to original position, then remove
         if let floating = floatingDragView {
             UIView.animate(withDuration: 0.25, delay: 0, options: .curveEaseInOut) {
+                floating.transform = .identity
                 floating.frame = self.originalCellFrameInWindow
                 floating.layer.shadowOpacity = 0
             } completion: { _ in
@@ -196,6 +204,26 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         }
 
         let draggedIDs = draggedIDs(from: payload)
+        let previousTarget = containerView.dragState.currentTarget
+
+        // Early out if target hasn't changed — avoid redundant work
+        if previousTarget == target {
+            return UIDropProposal(operation: .move)
+        }
+
+        // Dropping onto the dragged item or any of its descendants is a no-op, not an error
+        let targetRefersToSelf: Bool
+        switch target {
+        case .before(let id), .after(let id), .intoSection(let id):
+            targetRefersToSelf = draggedIDs.contains(id)
+                || draggedIDs.contains(where: { isDescendant(id, of: $0, in: tree) })
+        case .rootLevel:
+            targetRefersToSelf = false
+        }
+
+        if targetRefersToSelf {
+            return UIDropProposal(operation: .move)
+        }
 
         // Check cycle prevention
         guard canDrop(in: tree, draggedIDs: draggedIDs, onto: target) else {
@@ -235,13 +263,8 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         }
 
         // Update drag state with new target
-        let previousTarget = containerView.dragState.currentTarget
         containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: target))
-
-        // Fire hover haptic on target change
-        if previousTarget != target {
-            hapticController.fireHover()
-        }
+        hapticController.fireHover()
 
         // Auto-expand handling
         if case .intoSection(let targetID) = target {
@@ -350,10 +373,15 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         snapshot.frame = cellFrameInWindow
         snapshot.isUserInteractionEnabled = false
 
-        // Lifted appearance
+        // Light blue background
+        snapshot.backgroundColor = UIColor(red: 0x1A/255.0, green: 0x40/255.0, blue: 0x78/255.0, alpha: 1)
+        snapshot.layer.cornerRadius = 10
+        snapshot.clipsToBounds = false
+
+        // Shadow
         snapshot.layer.shadowColor = UIColor.black.cgColor
-        snapshot.layer.shadowOpacity = 0.2
-        snapshot.layer.shadowRadius = 8
+        snapshot.layer.shadowOpacity = 0.25
+        snapshot.layer.shadowRadius = 12
         snapshot.layer.shadowOffset = CGSize(width: 0, height: 4)
 
         window.addSubview(snapshot)

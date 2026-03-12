@@ -11,6 +11,15 @@ where Content: Sendable, Content.ID: Sendable {
     private var dropIndicatorLayer = DropIndicatorLayer()
     private(set) var dragState: DragState<Content> = .idle
     private var activePreviewLayout: PreviewLayout<Content>?
+    private var debugLabel: UILabel = {
+        let l = UILabel()
+        l.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        l.textColor = .white
+        l.backgroundColor = UIColor.black.withAlphaComponent(0.7)
+        l.numberOfLines = 0
+        l.layer.zPosition = 9999
+        return l
+    }()
 
     // MARK: - Configuration
 
@@ -40,6 +49,7 @@ where Content: Sendable, Content.ID: Sendable {
     private func setup() {
         layer.addSublayer(dropIndicatorLayer)
         alwaysBounceVertical = true
+        addSubview(debugLabel)
     }
 
     func installInteractions(dragDelegate: (any UIDragInteractionDelegate)?, dropDelegate: (any UIDropInteractionDelegate)?) {
@@ -236,14 +246,28 @@ where Content: Sendable, Content.ID: Sendable {
         let relativeY = point.y - rowTop
         let fraction = relativeY / configuration.rowHeight
 
-        if entry.hasChildren || (entry.content.isContainer && !configuration.canDropIntoContainersOnly) {
-            // For containers: top 25% = before, middle 50% = into, bottom 25% = after
+        let allowInto = !entry.isExpanded
+            && (entry.hasChildren || (entry.content.isContainer && !configuration.canDropIntoContainersOnly))
+
+        debugLabel.text = "idx=\(index) exp=\(entry.isExpanded) child=\(entry.hasChildren) cont=\(entry.content.isContainer) allow=\(allowInto)"
+        debugLabel.sizeToFit()
+        debugLabel.frame.origin = CGPoint(x: 8, y: contentOffset.y + 8)
+
+        if allowInto {
+            // For collapsed containers: top 25% = before, middle 50% = into, bottom 25% = after
             if fraction < 0.25 {
                 return .before(entry.id)
             } else if fraction > 0.75 {
                 return .after(entry.id)
             } else {
                 return .intoSection(entry.id)
+            }
+        } else if entry.isExpanded, index + 1 < flatEntries.count {
+            // For expanded containers: top 50% = before, bottom 50% = before first child
+            if fraction < 0.5 {
+                return .before(entry.id)
+            } else {
+                return .before(flatEntries[index + 1].id)
             }
         } else {
             // For leaves: top 50% = before, bottom 50% = after
@@ -397,10 +421,11 @@ where Content: Sendable, Content.ID: Sendable {
         }
 
         // Show the preview box in the gap
-        let rect = CGRect(x: 0, y: layout.gapY, width: bounds.width, height: layout.gapHeight)
+        let inset = theme.horizontalPadding
+        let rect = CGRect(x: inset, y: layout.gapY, width: bounds.width - inset * 2, height: layout.gapHeight)
         dropIndicatorLayer.update(
             for: rect,
-            style: .preview(
+            style: .livePreview(
                 fillColor: UIColor(theme.fillColor),
                 borderColor: theme.borderColor.map { UIColor($0) },
                 borderWidth: theme.borderWidth,
@@ -469,8 +494,18 @@ where Content: Sendable, Content.ID: Sendable {
         case .idle, .cancelling:
             updateDropIndicator(for: nil)
         case .dragging(_, let target):
+            // When target is nil but preview is already active (e.g. just transitioned
+            // from .lifting), preserve the current preview layout
+            if target == nil, activePreviewLayout != nil {
+                break
+            }
             updateDropIndicator(for: target)
-        case .lifting, .dropping:
+        case .lifting(let itemID, _):
+            // Show preview at the item's current position on lift
+            if case .preview = configuration.dropIndicatorStyle {
+                updateDropIndicator(for: .before(itemID))
+            }
+        case .dropping:
             break
         }
     }

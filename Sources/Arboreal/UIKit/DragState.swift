@@ -1,7 +1,7 @@
 @MainActor
 enum DragState<Content: TreeNodeContent>: Sendable where Content: Sendable {
     case idle
-    case lifting(itemID: Content.ID)
+    case lifting(itemID: Content.ID, payload: DragPayload<Content>? = nil)
     case dragging(payload: DragPayload<Content>, currentTarget: DropTarget<Content>?)
     case dropping(payload: DragPayload<Content>, target: DropTarget<Content>)
     case cancelling
@@ -15,6 +15,8 @@ enum DragState<Content: TreeNodeContent>: Sendable where Content: Sendable {
 
     var payload: DragPayload<Content>? {
         switch self {
+        case .lifting(_, let payload):
+            payload
         case .dragging(let payload, _), .dropping(let payload, _):
             payload
         default:
