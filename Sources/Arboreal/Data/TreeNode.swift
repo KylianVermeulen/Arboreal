@@ -3,14 +3,15 @@ public struct TreeNode<Content: TreeNodeContent>: Identifiable, Sendable {
     public var content: Content
     public var children: [TreeNode<Content>]
 
-    public var descendantCount: Int {
-        children.reduce(0) { $0 + 1 + $1.descendantCount }
-    }
+    public var descendantCount: Int { children.count }
 
     public init(content: Content, children: [TreeNode<Content>] = []) {
         self.id = content.id
         self.content = content
-        self.children = children
+        // Enforce max depth 1: children cannot have children
+        self.children = children.map { child in
+            TreeNode(content: child.content, children: [])
+        }
     }
 }
 

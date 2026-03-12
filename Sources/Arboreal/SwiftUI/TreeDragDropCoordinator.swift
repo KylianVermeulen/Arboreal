@@ -15,8 +15,6 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
     var isPerformingDrop = false
 
     private var hapticController: HapticController
-    private var autoExpandTimer: Timer?
-    private var autoExpandTargetID: Content.ID?
     private var view: TreeDragDropView<Content, CellContent>
     private weak var liftingCell: UIView?
 
@@ -155,7 +153,6 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
 
         hapticController.fireCancel()
         hapticController.tearDown()
-        cancelAutoExpandTimer()
         view.configuration.onDragCancelled?()
     }
 
@@ -180,7 +177,8 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         guard let containerView else { return UIDropProposal(operation: .cancel) }
 
         let location = session.location(in: containerView)
-        let target = containerView.resolveDropTarget(at: location)
+        let payload = session.items.first?.localObject as? DragPayload<Content>
+        let target = containerView.resolveDropTarget(at: location, payload: payload)
 
         // Update floating view position
         if let floating = floatingDragView, let window = containerView.window {
@@ -191,15 +189,12 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             )
         }
 
-        guard let target,
-              let dragItem = session.items.first,
-              let payload = dragItem.localObject as? DragPayload<Content> else {
+        guard let target, let payload else {
             if let existingPayload = containerView.dragState.payload {
                 containerView.transitionDragState(to: .dragging(payload: existingPayload, currentTarget: nil))
             } else {
                 containerView.transitionDragState(to: .idle)
             }
-            cancelAutoExpandTimer()
             return UIDropProposal(operation: .cancel)
         }
 
@@ -214,20 +209,34 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         // Dropping onto the dragged item or any of its descendants is a no-op, not an error
         let targetRefersToSelf: Bool
         switch target {
-        case .before(let id), .after(let id), .intoSection(let id):
+        case .atIndex(let parentID, let index):
+            if let parentID, (draggedIDs.contains(parentID) || draggedIDs.contains(where: { isDescendant(parentID, of: $0, in: tree) })) {
+                targetRefersToSelf = true
+            } else {
+                // Check if the child at this index (or index-1) is a dragged node
+                let siblings: [TreeNode<Content>]
+                if let parentID {
+                    siblings = findNodeInTree(id: parentID)?.children ?? []
+                } else {
+                    siblings = tree
+                }
+                let refersAtIndex = index < siblings.count && draggedIDs.contains(siblings[index].id)
+                let refersBeforeIndex = index > 0 && index <= siblings.count && draggedIDs.contains(siblings[index - 1].id)
+                targetRefersToSelf = refersAtIndex || refersBeforeIndex
+            }
+        case .intoSection(let id):
             targetRefersToSelf = draggedIDs.contains(id)
                 || draggedIDs.contains(where: { isDescendant(id, of: $0, in: tree) })
-        case .rootLevel:
-            targetRefersToSelf = false
         }
 
         if targetRefersToSelf {
+            containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: target))
             return UIDropProposal(operation: .move)
         }
 
-        // Check cycle prevention
+        // Check cycle prevention / depth enforcement
         guard canDrop(in: tree, draggedIDs: draggedIDs, onto: target) else {
-            hapticController.fireError()
+            containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: nil))
             return UIDropProposal(operation: .forbidden)
         }
 
@@ -236,29 +245,30 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
            case .intoSection(let parentID) = target,
            let parentNode = findNodeInTree(id: parentID) {
             if !canDropInto(parentNode.content, payload) {
+                containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: nil))
                 return UIDropProposal(operation: .forbidden)
             }
         }
 
-        if let canDropBetween = view.configuration.canDropBetween {
-            switch target {
-            case .before(let id):
-                let (prev, current) = neighborEntries(for: id)
-                if !canDropBetween(prev?.content, current?.content, payload) {
-                    return UIDropProposal(operation: .forbidden)
-                }
-            case .after(let id):
-                let (current, next) = neighborEntries(after: id)
-                if !canDropBetween(current?.content, next?.content, payload) {
-                    return UIDropProposal(operation: .forbidden)
-                }
-            default:
-                break
+        if let canDropBetween = view.configuration.canDropBetween,
+           case .atIndex(let parentID, let index) = target {
+            let siblings: [TreeNode<Content>]
+            if let parentID {
+                siblings = findNodeInTree(id: parentID)?.children ?? []
+            } else {
+                siblings = tree
+            }
+            let before = index > 0 ? siblings[index - 1].content : nil
+            let after = index < siblings.count ? siblings[index].content : nil
+            if !canDropBetween(before, after, payload) {
+                containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: nil))
+                return UIDropProposal(operation: .forbidden)
             }
         }
 
         // Check custom acceptance
         if let canAccept = view.configuration.canAcceptDrop, !canAccept(payload, target) {
+            containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: nil))
             return UIDropProposal(operation: .forbidden)
         }
 
@@ -266,21 +276,6 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: target))
         hapticController.fireHover()
 
-        // Auto-expand handling
-        if case .intoSection(let targetID) = target {
-            if autoExpandTargetID != targetID {
-                cancelAutoExpandTimer()
-                autoExpandTargetID = targetID
-                autoExpandTimer = Timer.scheduledTimer(withTimeInterval: view.configuration.autoExpandDelay, repeats: false) { [weak self] _ in
-                    Task { @MainActor in
-                        self?.expansionState.expand(targetID)
-                        self?.updateEntries()
-                    }
-                }
-            }
-        } else {
-            cancelAutoExpandTimer()
-        }
 
         return UIDropProposal(operation: .move)
     }
@@ -317,12 +312,12 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         view.configuration.onDropCompleted?(payload, target)
         view.configuration.onReorder?(newTree)
 
-        // Update the view
-        updateEntries()
+        // Animate from preview positions to final layout
+        let newEntries = flattenTree(newTree, expansionState: expansionState.expandedIDs)
+        containerView.animateDropCompletion(with: newEntries, draggedIDs: draggedIDs)
 
         isPerformingDrop = false
         containerView.transitionDragState(to: .idle)
-        cancelAutoExpandTimer()
         hapticController.tearDown()
     }
 
@@ -347,13 +342,11 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         } else {
             containerView?.transitionDragState(to: .idle)
         }
-        cancelAutoExpandTimer()
     }
 
     public func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: any UIDropSession) {
         removeFloatingDragView()
         containerView?.transitionDragState(to: .idle)
-        cancelAutoExpandTimer()
         hapticController.tearDown()
     }
 
@@ -408,40 +401,14 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         }
     }
 
-    private func cancelAutoExpandTimer() {
-        autoExpandTimer?.invalidate()
-        autoExpandTimer = nil
-        autoExpandTargetID = nil
-    }
-
     private func findNodeInTree(id: Content.ID) -> TreeNode<Content>? {
-        func find(in nodes: [TreeNode<Content>]) -> TreeNode<Content>? {
-            for node in nodes {
-                if node.id == id { return node }
-                if let found = find(in: node.children) { return found }
+        for node in tree {
+            if node.id == id { return node }
+            for child in node.children {
+                if child.id == id { return child }
             }
-            return nil
         }
-        return find(in: tree)
+        return nil
     }
 
-    private func neighborEntries(for id: Content.ID) -> (before: FlatTreeEntry<Content>?, current: FlatTreeEntry<Content>?) {
-        guard let containerView,
-              let entries = containerView.currentEntries,
-              let index = entries.firstIndex(where: { $0.id == id }) else {
-            return (nil, nil)
-        }
-        let before = index > 0 ? entries[index - 1] : nil
-        return (before, entries[index])
-    }
-
-    private func neighborEntries(after id: Content.ID) -> (current: FlatTreeEntry<Content>?, after: FlatTreeEntry<Content>?) {
-        guard let containerView,
-              let entries = containerView.currentEntries,
-              let index = entries.firstIndex(where: { $0.id == id }) else {
-            return (nil, nil)
-        }
-        let after = index < entries.count - 1 ? entries[index + 1] : nil
-        return (entries[index], after)
-    }
 }

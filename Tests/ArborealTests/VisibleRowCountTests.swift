@@ -51,29 +51,4 @@ struct VisibleRowCountTests {
         let count = visibleRowCount(for: .singleItem("missing"), in: entries)
         #expect(count == 1)
     }
-
-    @Test("Deeply nested expanded section counts all visible descendants")
-    func deeplyNested() {
-        let tree = [node("A", isContainer: true, children: [
-            node("B", isContainer: true, children: [
-                node("C"),
-                node("D"),
-            ]),
-        ])]
-        let entries = flattenTree(tree, expansionState: Set(["A", "B"]))
-        let count = visibleRowCount(for: .section("A"), in: entries)
-        #expect(count == 4) // A, B, C, D
-    }
-
-    @Test("Section with partially expanded children")
-    func partiallyExpanded() {
-        let tree = [node("A", isContainer: true, children: [
-            node("B", isContainer: true, children: [node("C")]),
-            node("D"),
-        ])]
-        // A is expanded, B is collapsed
-        let entries = flattenTree(tree, expansionState: Set(["A"]))
-        let count = visibleRowCount(for: .section("A"), in: entries)
-        #expect(count == 3) // A, B, D (C is hidden because B is collapsed)
-    }
 }

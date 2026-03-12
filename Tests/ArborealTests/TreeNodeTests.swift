@@ -32,14 +32,20 @@ struct TreeNodeTests {
         #expect(leaf.descendantCount == 0)
     }
 
-    @Test("Descendant count includes nested children")
-    func nestedDescendantCount() {
-        let tree = node("root", children: [
-            node("A", children: [node("A1"), node("A2")]),
-            node("B"),
-        ])
-        #expect(tree.descendantCount == 4)
-        #expect(tree.children[0].descendantCount == 2)
-        #expect(tree.children[1].descendantCount == 0)
+    @Test("Descendant count equals children count")
+    func descendantCount() {
+        let tree = node("root", children: [node("A"), node("B")])
+        #expect(tree.descendantCount == 2)
+        #expect(tree.children[0].descendantCount == 0)
+    }
+
+    @Test("Grandchildren are stripped on construction")
+    func grandchildrenStripped() {
+        let grandchild = TreeNode(content: TestContent("gc"))
+        let child = TreeNode(content: TestContent("child"), children: [grandchild])
+        let root = TreeNode(content: TestContent("root"), children: [child])
+        #expect(root.children.count == 1)
+        #expect(root.children[0].id == "child")
+        #expect(root.children[0].children.isEmpty)
     }
 }

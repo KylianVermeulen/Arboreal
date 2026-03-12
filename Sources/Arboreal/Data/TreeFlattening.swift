@@ -4,35 +4,36 @@ public func flattenTree<Content: TreeNodeContent>(
 ) -> [FlatTreeEntry<Content>] {
     let expanded = expansionState()
     var result: [FlatTreeEntry<Content>] = []
-
-    // Stack entries: (node, depth, parentID, indexInParent, siblingCount)
-    var stack: [(node: TreeNode<Content>, depth: Int, parentID: Content.ID?, indexInParent: Int, siblingCount: Int)] = []
-
-    // Push roots in reverse order so first root is processed first
     let rootCount = roots.count
-    for (index, root) in roots.enumerated().reversed() {
-        stack.append((root, 0, nil, index, rootCount))
-    }
 
-    while let (node, depth, parentID, indexInParent, siblingCount) = stack.popLast() {
-        let isExpanded = expanded.contains(node.id)
-        let hasChildren = !node.children.isEmpty
+    for (rootIndex, root) in roots.enumerated() {
+        let isExpanded = expanded.contains(root.id)
+        let hasChildren = !root.children.isEmpty
 
         result.append(FlatTreeEntry(
-            id: node.id,
-            content: node.content,
-            depth: depth,
-            parentID: parentID,
-            indexInParent: indexInParent,
+            id: root.id,
+            content: root.content,
+            depth: 0,
+            parentID: nil,
+            indexInParent: rootIndex,
             hasChildren: hasChildren,
             isExpanded: isExpanded && hasChildren,
-            isLastChild: indexInParent == siblingCount - 1
+            isLastChild: rootIndex == rootCount - 1
         ))
 
         if isExpanded && hasChildren {
-            let childCount = node.children.count
-            for (index, child) in node.children.enumerated().reversed() {
-                stack.append((child, depth + 1, node.id, index, childCount))
+            let childCount = root.children.count
+            for (childIndex, child) in root.children.enumerated() {
+                result.append(FlatTreeEntry(
+                    id: child.id,
+                    content: child.content,
+                    depth: 1,
+                    parentID: root.id,
+                    indexInParent: childIndex,
+                    hasChildren: false,
+                    isExpanded: false,
+                    isLastChild: childIndex == childCount - 1
+                ))
             }
         }
     }

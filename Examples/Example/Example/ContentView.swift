@@ -23,12 +23,18 @@ enum OutlineItem: TreeNodeContent {
 
 struct SectionRowView: View {
     let title: String
+    let isExpanded: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
 
             HStack {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Color.accentColor)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+
                 Text(title)
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(Color.accentColor)
@@ -87,11 +93,14 @@ struct ContentView: View {
             tree: $tree,
             selectedIDs: $selectedIDs,
             expansionState: expansionState,
-            configuration: .exampleConfiguration(tree: tree)
+            configuration: .exampleConfiguration
         ) { item, depth, isSelected, isExpanded in
             switch item {
-            case .section(_, let title):
-                SectionRowView(title: title)
+            case .section(let id, let title):
+                SectionRowView(title: title, isExpanded: isExpanded)
+                    .onTapGesture {
+                        expansionState.toggle(id)
+                    }
 
             case .task(let id, let title, let isCompleted):
                 TaskRowView(
@@ -126,7 +135,7 @@ struct ContentView: View {
 // MARK: - Configuration
 
 extension TreeDragDropConfiguration where Content == OutlineItem {
-    static func exampleConfiguration(tree: [TreeNode<OutlineItem>]) -> TreeDragDropConfiguration {
+    static var exampleConfiguration: TreeDragDropConfiguration {
         var config = TreeDragDropConfiguration()
         config.rowHeight = 44
         config.indentationWidth = 0
@@ -137,24 +146,6 @@ extension TreeDragDropConfiguration where Content == OutlineItem {
             cornerRadius: 10,
             horizontalPadding: 16
         )
-        config.canDropIntoSection = { _, payload in
-            func isSection(_ id: UUID) -> Bool {
-                func find(in nodes: [TreeNode<OutlineItem>]) -> Bool {
-                    for node in nodes {
-                        if node.id == id { return node.content.isContainer }
-                        if find(in: node.children) { return true }
-                    }
-                    return false
-                }
-                return find(in: tree)
-            }
-            switch payload {
-            case .singleItem(let id), .section(let id):
-                return !isSection(id)
-            case .multipleItems(let ids):
-                return !ids.contains(where: { isSection($0) })
-            }
-        }
         return config
     }
 }

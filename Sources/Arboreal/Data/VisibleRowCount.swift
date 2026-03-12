@@ -16,28 +16,25 @@ func computePreviewLayout<Content: TreeNodeContent>(
     payload: DragPayload<Content>,
     rowHeight: CGFloat
 ) -> PreviewLayout<Content> {
-    // Collect dragged IDs (including visible descendants)
+    // Collect dragged IDs (including visible children)
     let topLevelIDs = draggedIDSet(from: payload)
     var draggedIDs = Set<Content.ID>()
-    var draggedRowCount = 0
 
-    var i = 0
-    while i < entries.count {
-        let entry = entries[i]
+    for entry in entries {
         if topLevelIDs.contains(entry.id) {
             draggedIDs.insert(entry.id)
-            draggedRowCount += 1
-            let baseDepth = entry.depth
-            i += 1
-            while i < entries.count, entries[i].depth > baseDepth {
-                draggedIDs.insert(entries[i].id)
-                draggedRowCount += 1
-                i += 1
+            if entry.depth == 0, entry.isExpanded {
+                for other in entries where other.parentID == entry.id {
+                    draggedIDs.insert(other.id)
+                }
             }
-        } else {
-            i += 1
+        } else if entry.depth == 1, let parentID = entry.parentID, topLevelIDs.contains(parentID) {
+            draggedIDs.insert(entry.id)
         }
     }
+
+    // Gap height = one row per top-level dragged item (children are collapsed in the preview)
+    let draggedRowCount = topLevelIDs.count
 
     // Build non-dragged list preserving order
     var nonDragged: [FlatTreeEntry<Content>] = []
@@ -48,74 +45,26 @@ func computePreviewLayout<Content: TreeNodeContent>(
     // Find insertion point in the non-dragged list
     let insertionIndex: Int
     switch target {
-    case .before(let id):
-        if let idx = nonDragged.firstIndex(where: { $0.id == id }) {
-            insertionIndex = idx
-        } else if draggedIDs.contains(id),
-                  let originalIdx = entries.firstIndex(where: { $0.id == id }) {
-            // The target is itself being dragged — find the first non-dragged
-            // entry at or after the original position.
-            let afterOriginal = nonDragged.firstIndex(where: { entry in
-                guard let entryIdx = entries.firstIndex(where: { $0.id == entry.id }) else { return false }
-                return entryIdx >= originalIdx
-            })
-            insertionIndex = afterOriginal ?? nonDragged.count
-        } else {
-            insertionIndex = nonDragged.count
-        }
-
-    case .after(let id):
-        if let idx = nonDragged.firstIndex(where: { $0.id == id }) {
-            // Skip past this entry's visible subtree
-            let baseDepth = nonDragged[idx].depth
-            var end = idx + 1
-            while end < nonDragged.count, nonDragged[end].depth > baseDepth {
-                end += 1
-            }
-            insertionIndex = end
-        } else if draggedIDs.contains(id),
-                  let originalIdx = entries.firstIndex(where: { $0.id == id }) {
-            // The target is itself being dragged — find insertion after its
-            // subtree in the original list, then map to non-dragged index.
-            let baseDepth = entries[originalIdx].depth
-            var end = originalIdx + 1
-            while end < entries.count, entries[end].depth > baseDepth {
-                end += 1
-            }
-            let afterOriginal = nonDragged.firstIndex(where: { entry in
-                guard let entryIdx = entries.firstIndex(where: { $0.id == entry.id }) else { return false }
-                return entryIdx >= end
-            })
-            insertionIndex = afterOriginal ?? nonDragged.count
-        } else {
-            insertionIndex = nonDragged.count
-        }
+    case .atIndex(let parentID, let childIndex):
+        insertionIndex = resolveInsertionIndex(
+            parentID: parentID,
+            childIndex: childIndex,
+            entries: entries,
+            nonDragged: nonDragged,
+            draggedIDs: draggedIDs
+        )
 
     case .intoSection(let id):
         if let idx = nonDragged.firstIndex(where: { $0.id == id }) {
-            let sectionDepth = nonDragged[idx].depth
+            // Section's children are at depth 1; skip past them
             var end = idx + 1
-            while end < nonDragged.count, nonDragged[end].depth > sectionDepth {
+            while end < nonDragged.count, nonDragged[end].depth > nonDragged[idx].depth {
                 end += 1
             }
             insertionIndex = end
         } else {
             insertionIndex = nonDragged.count
         }
-
-    case .rootLevel(let index):
-        var rootCount = 0
-        var mapped = nonDragged.count
-        for (i, item) in nonDragged.enumerated() {
-            if item.depth == 0 {
-                if rootCount == index {
-                    mapped = i
-                    break
-                }
-                rootCount += 1
-            }
-        }
-        insertionIndex = mapped
     }
 
     let gapHeight = CGFloat(draggedRowCount) * rowHeight
@@ -138,6 +87,66 @@ func computePreviewLayout<Content: TreeNodeContent>(
     )
 }
 
+/// Resolves the flat-list insertion index for an `.atIndex` target.
+///
+/// Uses the anchor-child approach: finds the child at `childIndex` in the original entries,
+/// then locates it in the non-dragged list to determine the gap position.
+private func resolveInsertionIndex<Content: TreeNodeContent>(
+    parentID: Content.ID?,
+    childIndex: Int,
+    entries: [FlatTreeEntry<Content>],
+    nonDragged: [FlatTreeEntry<Content>],
+    draggedIDs: Set<Content.ID>
+) -> Int {
+    // Find direct children of the parent in the original entries
+    let targetDepth: Int
+    let searchStart: Int
+
+    if let parentID {
+        guard let parentIdx = entries.firstIndex(where: { $0.id == parentID }) else {
+            return nonDragged.count
+        }
+        targetDepth = entries[parentIdx].depth + 1
+        searchStart = parentIdx + 1
+    } else {
+        targetDepth = 0
+        searchStart = 0
+    }
+
+    // Collect direct children at targetDepth
+    var directChildren: [FlatTreeEntry<Content>] = []
+    for j in searchStart..<entries.count {
+        let entry = entries[j]
+        if parentID != nil && entry.depth < targetDepth { break }
+        if entry.depth == targetDepth {
+            directChildren.append(entry)
+        }
+    }
+
+    // Find anchor: first non-dragged child at or after childIndex
+    let anchorID: Content.ID?
+    if childIndex < directChildren.count {
+        anchorID = directChildren[childIndex...].first(where: { !draggedIDs.contains($0.id) })?.id
+    } else {
+        anchorID = nil
+    }
+
+    if let anchorID, let idx = nonDragged.firstIndex(where: { $0.id == anchorID }) {
+        return idx
+    }
+
+    // No anchor found — insert at end of parent's subtree in nonDragged
+    if let parentID, let parentIdx = nonDragged.firstIndex(where: { $0.id == parentID }) {
+        var end = parentIdx + 1
+        while end < nonDragged.count, nonDragged[end].depth > nonDragged[parentIdx].depth {
+            end += 1
+        }
+        return end
+    }
+
+    return nonDragged.count
+}
+
 /// Computes how many visible rows a drag payload occupies in the flattened tree.
 func visibleRowCount<Content: TreeNodeContent>(
     for payload: DragPayload<Content>,
@@ -157,7 +166,7 @@ func visibleRowCount<Content: TreeNodeContent>(
     }
 }
 
-private func draggedIDSet<Content: TreeNodeContent>(from payload: DragPayload<Content>) -> Set<Content.ID> {
+func draggedIDSet<Content: TreeNodeContent>(from payload: DragPayload<Content>) -> Set<Content.ID> {
     switch payload {
     case .singleItem(let id), .section(let id): [id]
     case .multipleItems(let ids): ids
@@ -168,17 +177,15 @@ private func visibleSubtreeCount<Content: TreeNodeContent>(
     for id: Content.ID,
     in entries: [FlatTreeEntry<Content>]
 ) -> Int {
-    guard let startIndex = entries.firstIndex(where: { $0.id == id }) else {
+    guard let entry = entries.first(where: { $0.id == id }) else {
         return 1
     }
-    let baseDepth = entries[startIndex].depth
-    var count = 1
-    var i = startIndex + 1
-    while i < entries.count, entries[i].depth > baseDepth {
-        count += 1
-        i += 1
+    // Depth-0 expanded nodes: count self + visible children
+    if entry.depth == 0, entry.isExpanded {
+        return 1 + entries.filter { $0.parentID == id }.count
     }
-    return count
+    // Depth-1 nodes or collapsed depth-0 nodes: just 1
+    return 1
 }
 
 private func hasSelectedAncestor<Content: TreeNodeContent>(
@@ -186,16 +193,8 @@ private func hasSelectedAncestor<Content: TreeNodeContent>(
     in ids: Set<Content.ID>,
     entries: [FlatTreeEntry<Content>]
 ) -> Bool {
-    guard let index = entries.firstIndex(where: { $0.id == id }) else { return false }
-    let depth = entries[index].depth
-    var i = index - 1
-    while i >= 0 {
-        let entry = entries[i]
-        if entry.depth < depth, ids.contains(entry.id) {
-            return true
-        }
-        if entry.depth == 0 { break }
-        i -= 1
-    }
-    return false
+    guard let entry = entries.first(where: { $0.id == id }) else { return false }
+    // With max depth 1, the only possible ancestor is the parent
+    guard let parentID = entry.parentID else { return false }
+    return ids.contains(parentID)
 }

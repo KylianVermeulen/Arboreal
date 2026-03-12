@@ -46,15 +46,16 @@ struct TreeFlatteningTests {
         #expect(result[2].indexInParent == 1)
     }
 
-    @Test("Deep nesting with all expanded")
-    func deepNesting() {
-        let tree = [node("A", children: [node("B", children: [node("C")])])]
-        let result = flattenTree(tree, expansionState: Set(["A", "B"]))
+    @Test("Children are always at depth 1")
+    func childrenAtDepthOne() {
+        let tree = [node("A", children: [node("B"), node("C")])]
+        let result = flattenTree(tree, expansionState: Set(["A"]))
         #expect(result.count == 3)
         #expect(result[0].depth == 0)
         #expect(result[1].depth == 1)
-        #expect(result[2].depth == 2)
-        #expect(result[2].parentID == "B")
+        #expect(result[1].hasChildren == false)
+        #expect(result[2].depth == 1)
+        #expect(result[2].parentID == "A")
     }
 
     @Test("Multiple roots preserve order")

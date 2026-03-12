@@ -4,21 +4,23 @@ public func extractNodes<Content: TreeNodeContent>(
     ids: Set<Content.ID>
 ) -> (remaining: [TreeNode<Content>], extracted: [TreeNode<Content>]) {
     var extracted: [TreeNode<Content>] = []
+    var remaining: [TreeNode<Content>] = []
 
-    func filter(_ nodes: [TreeNode<Content>]) -> [TreeNode<Content>] {
-        var result: [TreeNode<Content>] = []
-        for var node in nodes {
-            if ids.contains(node.id) {
-                extracted.append(node)
-            } else {
-                node.children = filter(node.children)
-                result.append(node)
+    for var root in roots {
+        if ids.contains(root.id) {
+            extracted.append(root)
+        } else {
+            root.children = root.children.filter { child in
+                if ids.contains(child.id) {
+                    extracted.append(child)
+                    return false
+                }
+                return true
             }
+            remaining.append(root)
         }
-        return result
     }
 
-    let remaining = filter(roots)
     return (remaining, extracted)
 }
 
@@ -29,50 +31,35 @@ public func insertNodes<Content: TreeNodeContent>(
     at target: DropTarget<Content>
 ) -> [TreeNode<Content>] {
     switch target {
-    case .rootLevel(let index):
-        var result = roots
-        let clampedIndex = min(max(index, 0), result.count)
-        result.insert(contentsOf: nodes, at: clampedIndex)
-        return result
-
-    case .before(let targetID):
-        return insertRelative(into: roots, nodes: nodes, targetID: targetID, position: .before)
-
-    case .after(let targetID):
-        return insertRelative(into: roots, nodes: nodes, targetID: targetID, position: .after)
+    case .atIndex(let parentID, let index):
+        if let parentID {
+            return insertAtIndex(roots: roots, nodes: nodes, parentID: parentID, index: index)
+        } else {
+            var result = roots
+            let clamped = min(max(index, 0), result.count)
+            result.insert(contentsOf: nodes, at: clamped)
+            return result
+        }
 
     case .intoSection(let parentID):
         return insertIntoContainer(roots: roots, nodes: nodes, parentID: parentID)
     }
 }
 
-private enum RelativePosition {
-    case before, after
-}
-
-private func insertRelative<Content: TreeNodeContent>(
-    into nodes: [TreeNode<Content>],
-    nodes toInsert: [TreeNode<Content>],
-    targetID: Content.ID,
-    position: RelativePosition
+private func insertAtIndex<Content: TreeNodeContent>(
+    roots: [TreeNode<Content>],
+    nodes: [TreeNode<Content>],
+    parentID: Content.ID,
+    index: Int
 ) -> [TreeNode<Content>] {
-    var result: [TreeNode<Content>] = []
-    for var node in nodes {
-        if node.id == targetID {
-            switch position {
-            case .before:
-                result.append(contentsOf: toInsert)
-                result.append(node)
-            case .after:
-                result.append(node)
-                result.append(contentsOf: toInsert)
-            }
-        } else {
-            node.children = insertRelative(into: node.children, nodes: toInsert, targetID: targetID, position: position)
-            result.append(node)
+    roots.map { node in
+        var node = node
+        if node.id == parentID {
+            let clamped = min(max(index, 0), node.children.count)
+            node.children.insert(contentsOf: nodes, at: clamped)
         }
+        return node
     }
-    return result
 }
 
 private func insertIntoContainer<Content: TreeNodeContent>(
@@ -84,22 +71,61 @@ private func insertIntoContainer<Content: TreeNodeContent>(
         var node = node
         if node.id == parentID {
             node.children.append(contentsOf: nodes)
-        } else {
-            node.children = insertIntoContainer(roots: node.children, nodes: nodes, parentID: parentID)
         }
         return node
     }
 }
 
 /// Performs a complete move operation: extract then insert.
+/// Handles index adjustment when dragged nodes shift child indices.
 public func moveNodes<Content: TreeNodeContent>(
     in roots: [TreeNode<Content>],
     ids: Set<Content.ID>,
     to target: DropTarget<Content>
 ) -> [TreeNode<Content>] {
-    let (remaining, extracted) = extractNodes(from: roots, ids: ids)
-    guard !extracted.isEmpty else { return roots }
-    return insertNodes(into: remaining, nodes: extracted, at: target)
+    switch target {
+    case .atIndex(let parentID, let index):
+        // Find the anchor child (first non-dragged child at or after `index`)
+        // so we can locate the correct insertion point after extraction.
+        let siblings: [TreeNode<Content>]
+        if let parentID {
+            siblings = findNode(id: parentID, in: roots)?.children ?? []
+        } else {
+            siblings = roots
+        }
+
+        let anchorID: Content.ID?
+        if index < siblings.count {
+            anchorID = siblings[index...].first(where: { !ids.contains($0.id) })?.id
+        } else {
+            anchorID = nil
+        }
+
+        let (remaining, extracted) = extractNodes(from: roots, ids: ids)
+        guard !extracted.isEmpty else { return roots }
+
+        // Recompute index in the remaining tree
+        let newSiblings: [TreeNode<Content>]
+        if let parentID {
+            newSiblings = findNode(id: parentID, in: remaining)?.children ?? []
+        } else {
+            newSiblings = remaining
+        }
+
+        let adjustedIndex: Int
+        if let anchorID, let anchorIdx = newSiblings.firstIndex(where: { $0.id == anchorID }) {
+            adjustedIndex = anchorIdx
+        } else {
+            adjustedIndex = newSiblings.count
+        }
+
+        return insertNodes(into: remaining, nodes: extracted, at: .atIndex(parentID: parentID, index: adjustedIndex))
+
+    case .intoSection:
+        let (remaining, extracted) = extractNodes(from: roots, ids: ids)
+        guard !extracted.isEmpty else { return roots }
+        return insertNodes(into: remaining, nodes: extracted, at: target)
+    }
 }
 
 /// Checks if a drop would create a cycle (dropping a parent into its own descendant).
@@ -108,66 +134,32 @@ public func canDrop<Content: TreeNodeContent>(
     draggedIDs: Set<Content.ID>,
     onto target: DropTarget<Content>
 ) -> Bool {
-    // Reject dropping before/after/into the dragged item itself
-    switch target {
-    case .before(let id), .after(let id), .intoSection(let id):
-        if draggedIDs.contains(id) { return false }
-    case .rootLevel:
-        break
-    }
-
-    // Get the target parent ID
     let targetParentID: Content.ID?
     switch target {
-    case .rootLevel:
-        return true // Can always drop at root level
-    case .intoSection(let parentID):
+    case .atIndex(let parentID, _):
         targetParentID = parentID
-    case .before(let siblingID), .after(let siblingID):
-        targetParentID = findParentID(in: roots, of: siblingID)
+    case .intoSection(let id):
+        if draggedIDs.contains(id) { return false }
+        targetParentID = id
     }
 
     guard let targetParentID else { return true }
-
-    // If dropping into one of the dragged items, that's not allowed
     if draggedIDs.contains(targetParentID) { return false }
 
-    // Check if the target parent is a descendant of any dragged node
+    // With max depth 1, dropping into a parent places nodes at depth 1.
+    // Nodes with children or containers cannot exist at depth 1.
     for draggedID in draggedIDs {
-        if isDescendant(targetParentID, of: draggedID, in: roots) {
-            return false
+        if let node = findNode(id: draggedID, in: roots) {
+            if !node.children.isEmpty || node.content.isContainer {
+                return false
+            }
+            if node.children.contains(where: { $0.id == targetParentID }) {
+                return false
+            }
         }
     }
 
     return true
-}
-
-/// Find the parent ID of a node with the given ID.
-private func findParentID<Content: TreeNodeContent>(
-    in roots: [TreeNode<Content>],
-    of targetID: Content.ID
-) -> Content.ID? {
-    for root in roots {
-        if let result = findParentID(in: root, of: targetID) {
-            return result
-        }
-    }
-    return nil
-}
-
-private func findParentID<Content: TreeNodeContent>(
-    in node: TreeNode<Content>,
-    of targetID: Content.ID
-) -> Content.ID? {
-    for child in node.children {
-        if child.id == targetID {
-            return node.id
-        }
-        if let found = findParentID(in: child, of: targetID) {
-            return found
-        }
-    }
-    return nil
 }
 
 /// Check if `possibleDescendant` is a descendant of the node with `ancestorID`.
@@ -177,7 +169,7 @@ func isDescendant<Content: TreeNodeContent>(
     in roots: [TreeNode<Content>]
 ) -> Bool {
     guard let ancestor = findNode(id: ancestorID, in: roots) else { return false }
-    return containsNode(id: possibleDescendant, in: ancestor.children)
+    return ancestor.children.contains(where: { $0.id == possibleDescendant })
 }
 
 func findNode<Content: TreeNodeContent>(
@@ -186,7 +178,9 @@ func findNode<Content: TreeNodeContent>(
 ) -> TreeNode<Content>? {
     for node in nodes {
         if node.id == id { return node }
-        if let found = findNode(id: id, in: node.children) { return found }
+        for child in node.children {
+            if child.id == id { return child }
+        }
     }
     return nil
 }
@@ -197,7 +191,9 @@ func containsNode<Content: TreeNodeContent>(
 ) -> Bool {
     for node in nodes {
         if node.id == id { return true }
-        if containsNode(id: id, in: node.children) { return true }
+        for child in node.children {
+            if child.id == id { return true }
+        }
     }
     return false
 }
