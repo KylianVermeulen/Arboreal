@@ -437,7 +437,7 @@ where Content: Sendable, Content.ID: Sendable {
     private func applyPreviewLayout(_ layout: PreviewLayout<Content>) {
         let rowHeight = configuration.rowHeight
 
-        for (index, entry) in flatEntries.enumerated() {
+        for (_, entry) in flatEntries.enumerated() {
             let key = AnyHashable(entry.id)
             guard let cell = cellPool.cell(for: key) else { continue }
 
