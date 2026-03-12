@@ -319,94 +319,9 @@ where Content: Sendable, Content.ID: Sendable {
             return
         }
 
-        switch configuration.dropIndicatorStyle {
-        case .default:
-            updateDropIndicatorDefault(for: target)
-        case .themed(let theme):
-            updateDropIndicatorThemed(for: target, theme: theme)
-        case .preview(let theme):
-            updateDropIndicatorPreview(for: target, theme: theme)
-        case .custom:
-            dropIndicatorLayer.hide()
-        }
-    }
-
-    private func updateDropIndicatorDefault(for target: DropTarget<Content>) {
-        switch target {
-        case .before(let id):
-            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
-                let y = CGFloat(index) * configuration.rowHeight
-                let rect = CGRect(x: 0, y: y - 1, width: bounds.width, height: 2)
-                dropIndicatorLayer.update(for: rect, style: .line(color: .tintColor, width: 2))
-            }
-        case .after(let id):
-            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
-                let y = CGFloat(index + 1) * configuration.rowHeight
-                let rect = CGRect(x: 0, y: y - 1, width: bounds.width, height: 2)
-                dropIndicatorLayer.update(for: rect, style: .line(color: .tintColor, width: 2))
-            }
-        case .intoSection(let id):
-            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
-                let indent = CGFloat(flatEntries[index].depth) * configuration.indentationWidth
-                let rect = CGRect(
-                    x: indent,
-                    y: CGFloat(index) * configuration.rowHeight,
-                    width: bounds.width - indent,
-                    height: configuration.rowHeight
-                )
-                dropIndicatorLayer.update(
-                    for: rect,
-                    style: .highlight(color: .tintColor.withAlphaComponent(0.1), cornerRadius: 8))
-            }
-        case .rootLevel(let index):
-            let y = CGFloat(min(index, flatEntries.count)) * configuration.rowHeight
-            let rect = CGRect(x: 0, y: y - 1, width: bounds.width, height: 2)
-            dropIndicatorLayer.update(for: rect, style: .line(color: .tintColor, width: 2))
-        }
-    }
-
-    private func updateDropIndicatorThemed(for target: DropTarget<Content>, theme: DropIndicatorTheme) {
-        let lineColor = UIColor(theme.lineColor)
-        let lineWidth = theme.lineWidth
-        let highlightColor = UIColor(theme.highlightColor)
-        let cornerRadius = theme.cornerRadius
-
-        switch target {
-        case .before(let id):
-            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
-                let y = CGFloat(index) * configuration.rowHeight
-                let rect = CGRect(x: 0, y: y - lineWidth / 2, width: bounds.width, height: lineWidth)
-                dropIndicatorLayer.update(for: rect, style: .line(color: lineColor, width: lineWidth))
-            }
-        case .after(let id):
-            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
-                let y = CGFloat(index + 1) * configuration.rowHeight
-                let rect = CGRect(x: 0, y: y - lineWidth / 2, width: bounds.width, height: lineWidth)
-                dropIndicatorLayer.update(for: rect, style: .line(color: lineColor, width: lineWidth))
-            }
-        case .intoSection(let id):
-            if let index = flatEntries.firstIndex(where: { $0.id == id }) {
-                let indent = CGFloat(flatEntries[index].depth) * configuration.indentationWidth
-                let rect = CGRect(
-                    x: indent,
-                    y: CGFloat(index) * configuration.rowHeight,
-                    width: bounds.width - indent,
-                    height: configuration.rowHeight
-                )
-                dropIndicatorLayer.update(
-                    for: rect,
-                    style: .highlight(color: highlightColor, cornerRadius: cornerRadius))
-            }
-        case .rootLevel(let index):
-            let y = CGFloat(min(index, flatEntries.count)) * configuration.rowHeight
-            let rect = CGRect(x: 0, y: y - lineWidth / 2, width: bounds.width, height: lineWidth)
-            dropIndicatorLayer.update(for: rect, style: .line(color: lineColor, width: lineWidth))
-        }
-    }
-
-    private func updateDropIndicatorPreview(for target: DropTarget<Content>, theme: DropPreviewTheme) {
         guard let payload = dragState.payload else { return }
 
+        let theme = configuration.dropPreviewTheme
         let layout = Arboreal.computePreviewLayout(
             entries: flatEntries,
             target: target,
@@ -425,12 +340,10 @@ where Content: Sendable, Content.ID: Sendable {
         let rect = CGRect(x: inset, y: layout.gapY, width: bounds.width - inset * 2, height: layout.gapHeight)
         dropIndicatorLayer.update(
             for: rect,
-            style: .livePreview(
-                fillColor: UIColor(theme.fillColor),
-                borderColor: theme.borderColor.map { UIColor($0) },
-                borderWidth: theme.borderWidth,
-                cornerRadius: theme.cornerRadius
-            )
+            fillColor: UIColor(theme.fillColor),
+            borderColor: theme.borderColor.map { UIColor($0) },
+            borderWidth: theme.borderWidth,
+            cornerRadius: theme.cornerRadius
         )
     }
 
@@ -501,10 +414,7 @@ where Content: Sendable, Content.ID: Sendable {
             }
             updateDropIndicator(for: target)
         case .lifting(let itemID, _):
-            // Show preview at the item's current position on lift
-            if case .preview = configuration.dropIndicatorStyle {
-                updateDropIndicator(for: .before(itemID))
-            }
+            updateDropIndicator(for: .before(itemID))
         case .dropping:
             break
         }

@@ -21,7 +21,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
     public var canDropBetween: (@MainActor @Sendable (Content?, Content?, DragPayload<Content>) -> Bool)?
 
     // MARK: - Drop Indicator
-    public var dropIndicatorStyle: DropIndicatorStyle
+    public var dropPreviewTheme: DropPreviewTheme
 
     // MARK: - Haptics
     public var hapticConfiguration: HapticConfiguration
@@ -42,7 +42,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
         dropEnabled: Bool = true,
         canDropIntoContainersOnly: Bool = false,
         autoExpandDelay: TimeInterval = 0.8,
-        dropIndicatorStyle: DropIndicatorStyle = .default,
+        dropPreviewTheme: DropPreviewTheme = .default,
         hapticConfiguration: HapticConfiguration = .default
     ) {
         self.rowHeight = rowHeight
@@ -52,7 +52,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
         self.dropEnabled = dropEnabled
         self.canDropIntoContainersOnly = canDropIntoContainersOnly
         self.autoExpandDelay = autoExpandDelay
-        self.dropIndicatorStyle = dropIndicatorStyle
+        self.dropPreviewTheme = dropPreviewTheme
         self.hapticConfiguration = hapticConfiguration
     }
 }
