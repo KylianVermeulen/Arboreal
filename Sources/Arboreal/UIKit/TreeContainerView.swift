@@ -278,10 +278,10 @@ where Content: Sendable, Content.ID: Sendable {
         let target: DropTarget<Content>
 
         if allowInto {
-            // For collapsed containers: top 25% = before, middle 50% = into, bottom 25% = after
-            if fraction < 0.25 {
+            // For collapsed containers: top 30% = before, middle 40% = into, bottom 30% = after
+            if fraction < 0.30 {
                 target = .atIndex(parentID: entry.parentID, index: entry.indexInParent)
-            } else if fraction > 0.75 {
+            } else if fraction > 0.70 {
                 target = .atIndex(parentID: entry.parentID, index: entry.indexInParent + 1)
             } else {
                 target = .intoSection(entry.id)
