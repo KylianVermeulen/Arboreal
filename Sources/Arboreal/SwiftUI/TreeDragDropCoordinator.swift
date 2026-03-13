@@ -198,7 +198,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             return UIDropProposal(operation: .cancel)
         }
 
-        let draggedIDs = draggedIDs(from: payload)
+        let draggedIDs = draggedIDSet(from: payload)
         let previousTarget = containerView.dragState.currentTarget
 
         // Early out if target hasn't changed — avoid redundant work
@@ -214,14 +214,9 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
                 targetRefersToSelf = true
             } else {
                 // Check if the child at this index (or index-1) is a dragged node
-                let siblings: [TreeNode<Content>]
-                if let parentID {
-                    siblings = findNodeInTree(id: parentID)?.children ?? []
-                } else {
-                    siblings = tree
-                }
-                let refersAtIndex = index < siblings.count && draggedIDs.contains(siblings[index].id)
-                let refersBeforeIndex = index > 0 && index <= siblings.count && draggedIDs.contains(siblings[index - 1].id)
+                let sibs = siblings(ofParent: parentID, in: tree)
+                let refersAtIndex = index < sibs.count && draggedIDs.contains(sibs[index].id)
+                let refersBeforeIndex = index > 0 && index <= sibs.count && draggedIDs.contains(sibs[index - 1].id)
                 targetRefersToSelf = refersAtIndex || refersBeforeIndex
             }
         case .intoSection(let id):
@@ -243,7 +238,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         // Check granular drop validation
         if let canDropInto = view.configuration.canDropIntoSection,
            case .intoSection(let parentID) = target,
-           let parentNode = findNodeInTree(id: parentID) {
+           let parentNode = findNode(id: parentID, in: tree) {
             if !canDropInto(parentNode.content, payload) {
                 containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: nil))
                 return UIDropProposal(operation: .forbidden)
@@ -252,14 +247,9 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
 
         if let canDropBetween = view.configuration.canDropBetween,
            case .atIndex(let parentID, let index) = target {
-            let siblings: [TreeNode<Content>]
-            if let parentID {
-                siblings = findNodeInTree(id: parentID)?.children ?? []
-            } else {
-                siblings = tree
-            }
-            let before = index > 0 ? siblings[index - 1].content : nil
-            let after = index < siblings.count ? siblings[index].content : nil
+            let sibs = siblings(ofParent: parentID, in: tree)
+            let before = index > 0 ? sibs[index - 1].content : nil
+            let after = index < sibs.count ? sibs[index].content : nil
             if !canDropBetween(before, after, payload) {
                 containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: nil))
                 return UIDropProposal(operation: .forbidden)
@@ -292,7 +282,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
 
         isPerformingDrop = true
 
-        let draggedIDs = draggedIDs(from: payload)
+        let draggedIDs = draggedIDSet(from: payload)
 
         // Perform the mutation
         let newTree = moveNodes(in: tree, ids: draggedIDs, to: target)
@@ -390,25 +380,4 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         floatingDragView?.removeFromSuperview()
         floatingDragView = nil
     }
-
-    // MARK: - Helpers
-
-    private func draggedIDs(from payload: DragPayload<Content>) -> Set<Content.ID> {
-        switch payload {
-        case .singleItem(let id): [id]
-        case .multipleItems(let ids): ids
-        case .section(let id): [id]
-        }
-    }
-
-    private func findNodeInTree(id: Content.ID) -> TreeNode<Content>? {
-        for node in tree {
-            if node.id == id { return node }
-            for child in node.children {
-                if child.id == id { return child }
-            }
-        }
-        return nil
-    }
-
 }

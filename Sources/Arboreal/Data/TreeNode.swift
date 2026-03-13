@@ -9,8 +9,12 @@ public struct TreeNode<Content: TreeNodeContent>: Identifiable, Sendable {
         self.id = content.id
         self.content = content
         // Enforce max depth 1: children cannot have children
-        self.children = children.map { child in
-            TreeNode(content: child.content, children: [])
+        if children.allSatisfy({ $0.children.isEmpty }) {
+            self.children = children
+        } else {
+            self.children = children.map { child in
+                TreeNode(content: child.content, children: [])
+            }
         }
     }
 }

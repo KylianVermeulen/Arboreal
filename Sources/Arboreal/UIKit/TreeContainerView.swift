@@ -7,6 +7,7 @@ where Content: Sendable, Content.ID: Sendable {
     // MARK: - State
 
     private var flatEntries: [FlatTreeEntry<Content>] = []
+    private var rootCount: Int = 0
     private var cellPool = ViewReusePool<TreeNodeCell>(factory: { TreeNodeCell() })
     private var dropIndicatorLayer = DropIndicatorLayer()
     private(set) var dragState: DragState<Content> = .idle
@@ -26,10 +27,6 @@ where Content: Sendable, Content.ID: Sendable {
 
     var configuration: TreeDragDropConfiguration<Content> = .init()
     var cellContentProvider: (@MainActor (FlatTreeEntry<Content>) -> AnyView)?
-
-    // MARK: - Public Accessors
-
-    var currentEntries: [FlatTreeEntry<Content>]? { flatEntries.isEmpty ? nil : flatEntries }
 
     // MARK: - Layout Constants
 
@@ -75,6 +72,7 @@ where Content: Sendable, Content.ID: Sendable {
 
         let oldEntries = flatEntries
         flatEntries = newEntries
+        rootCount = newEntries.lazy.filter { $0.depth == 0 }.count
 
         // Use CollectionDifference for efficient updates
         let diff = newEntries.difference(from: oldEntries) { $0.id == $1.id }
@@ -261,7 +259,6 @@ where Content: Sendable, Content.ID: Sendable {
             if activePreviewLayout != nil, let current = dragState.currentTarget {
                 return current
             }
-            let rootCount = flatEntries.lazy.filter { $0.depth == 0 }.count
             let raw = DropTarget<Content>.atIndex(parentID: nil, index: rootCount)
             let resolved = redirectRootTarget(raw)
             updateDebugLabel(resolved)
@@ -330,9 +327,7 @@ where Content: Sendable, Content.ID: Sendable {
                 groups.append((root, rootY, bottomY))
             }
         } else {
-            let visibleRoots = flatEntries.filter { $0.depth == 0 && !draggedIDs.contains($0.id) }
-            for root in visibleRoots {
-                guard let rootIdx = flatEntries.firstIndex(where: { $0.id == root.id }) else { continue }
+            for (rootIdx, root) in flatEntries.enumerated() where root.depth == 0 && !draggedIDs.contains(root.id) {
                 let topY = CGFloat(rootIdx) * configuration.rowHeight
                 var endIdx = rootIdx + 1
                 while endIdx < flatEntries.count, flatEntries[endIdx].depth > 0 {
@@ -359,7 +354,6 @@ where Content: Sendable, Content.ID: Sendable {
         }
 
         // Below all groups
-        let rootCount = flatEntries.lazy.filter { $0.depth == 0 }.count
         return .atIndex(parentID: nil, index: rootCount)
     }
 
@@ -390,11 +384,7 @@ where Content: Sendable, Content.ID: Sendable {
     /// Returns true if the payload contains nodes that must stay at root level
     /// (containers or nodes with children).
     private func isDraggingRootOnlyContent(_ payload: DragPayload<Content>) -> Bool {
-        let ids: [Content.ID]
-        switch payload {
-        case .singleItem(let id), .section(let id): ids = [id]
-        case .multipleItems(let set): ids = Array(set)
-        }
+        let ids = draggedIDSet(from: payload)
         return ids.contains { id in
             guard let entry = flatEntries.first(where: { $0.id == id }) else { return false }
             return entry.depth == 0 && (entry.hasChildren || entry.content.isContainer)
@@ -415,8 +405,16 @@ where Content: Sendable, Content.ID: Sendable {
         }
 
         if prevRoot.isExpanded {
-            // Append after last child
-            let childCount = flatEntries.filter { $0.parentID == prevRoot.id }.count
+            // Append after last child — scan forward from prevRoot's position
+            guard let prevIdx = flatEntries.lastIndex(where: { $0.id == prevRoot.id }) else {
+                return target
+            }
+            var childCount = 0
+            var j = prevIdx + 1
+            while j < flatEntries.count, flatEntries[j].depth > 0 {
+                childCount += 1
+                j += 1
+            }
             return .atIndex(parentID: prevRoot.id, index: childCount)
         } else if prevRoot.hasChildren || prevRoot.content.isContainer {
             return .intoSection(prevRoot.id)
@@ -559,11 +557,9 @@ where Content: Sendable, Content.ID: Sendable {
 
         // Find the Y position of the dragged section for child collapse animation
         var draggedSectionY: CGFloat?
-        for entry in flatEntries {
+        for (idx, entry) in flatEntries.enumerated() {
             if entry.depth == 0, layout.draggedIDs.contains(entry.id) {
-                if let idx = flatEntries.firstIndex(where: { $0.id == entry.id }) {
-                    draggedSectionY = CGFloat(idx) * rowHeight
-                }
+                draggedSectionY = CGFloat(idx) * rowHeight
                 break
             }
         }

@@ -42,7 +42,7 @@ public func insertNodes<Content: TreeNodeContent>(
         }
 
     case .intoSection(let parentID):
-        return insertIntoContainer(roots: roots, nodes: nodes, parentID: parentID)
+        return insertAtIndex(roots: roots, nodes: nodes, parentID: parentID, index: Int.max)
     }
 }
 
@@ -62,20 +62,6 @@ private func insertAtIndex<Content: TreeNodeContent>(
     }
 }
 
-private func insertIntoContainer<Content: TreeNodeContent>(
-    roots: [TreeNode<Content>],
-    nodes: [TreeNode<Content>],
-    parentID: Content.ID
-) -> [TreeNode<Content>] {
-    roots.map { node in
-        var node = node
-        if node.id == parentID {
-            node.children.append(contentsOf: nodes)
-        }
-        return node
-    }
-}
-
 /// Performs a complete move operation: extract then insert.
 /// Handles index adjustment when dragged nodes shift child indices.
 public func moveNodes<Content: TreeNodeContent>(
@@ -87,16 +73,11 @@ public func moveNodes<Content: TreeNodeContent>(
     case .atIndex(let parentID, let index):
         // Find the anchor child (first non-dragged child at or after `index`)
         // so we can locate the correct insertion point after extraction.
-        let siblings: [TreeNode<Content>]
-        if let parentID {
-            siblings = findNode(id: parentID, in: roots)?.children ?? []
-        } else {
-            siblings = roots
-        }
+        let currentSiblings = siblings(ofParent: parentID, in: roots)
 
         let anchorID: Content.ID?
-        if index < siblings.count {
-            anchorID = siblings[index...].first(where: { !ids.contains($0.id) })?.id
+        if index < currentSiblings.count {
+            anchorID = currentSiblings[index...].first(where: { !ids.contains($0.id) })?.id
         } else {
             anchorID = nil
         }
@@ -105,18 +86,13 @@ public func moveNodes<Content: TreeNodeContent>(
         guard !extracted.isEmpty else { return roots }
 
         // Recompute index in the remaining tree
-        let newSiblings: [TreeNode<Content>]
-        if let parentID {
-            newSiblings = findNode(id: parentID, in: remaining)?.children ?? []
-        } else {
-            newSiblings = remaining
-        }
+        let remainingSiblings = siblings(ofParent: parentID, in: remaining)
 
         let adjustedIndex: Int
-        if let anchorID, let anchorIdx = newSiblings.firstIndex(where: { $0.id == anchorID }) {
+        if let anchorID, let anchorIdx = remainingSiblings.firstIndex(where: { $0.id == anchorID }) {
             adjustedIndex = anchorIdx
         } else {
-            adjustedIndex = newSiblings.count
+            adjustedIndex = remainingSiblings.count
         }
 
         return insertNodes(into: remaining, nodes: extracted, at: .atIndex(parentID: parentID, index: adjustedIndex))
@@ -153,9 +129,6 @@ public func canDrop<Content: TreeNodeContent>(
             if !node.children.isEmpty || node.content.isContainer {
                 return false
             }
-            if node.children.contains(where: { $0.id == targetParentID }) {
-                return false
-            }
         }
     }
 
@@ -172,6 +145,17 @@ func isDescendant<Content: TreeNodeContent>(
     return ancestor.children.contains(where: { $0.id == possibleDescendant })
 }
 
+/// Returns the children of the node with `parentID`, or `roots` if `parentID` is nil.
+func siblings<Content: TreeNodeContent>(
+    ofParent parentID: Content.ID?,
+    in roots: [TreeNode<Content>]
+) -> [TreeNode<Content>] {
+    if let parentID {
+        return findNode(id: parentID, in: roots)?.children ?? []
+    }
+    return roots
+}
+
 func findNode<Content: TreeNodeContent>(
     id: Content.ID,
     in nodes: [TreeNode<Content>]
@@ -183,17 +167,4 @@ func findNode<Content: TreeNodeContent>(
         }
     }
     return nil
-}
-
-func containsNode<Content: TreeNodeContent>(
-    id: Content.ID,
-    in nodes: [TreeNode<Content>]
-) -> Bool {
-    for node in nodes {
-        if node.id == id { return true }
-        for child in node.children {
-            if child.id == id { return true }
-        }
-    }
-    return false
 }
