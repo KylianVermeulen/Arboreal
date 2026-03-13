@@ -1,5 +1,8 @@
 # Arboreal
 
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FKylianVermeulen%2FArboreal%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/KylianVermeulen/Arboreal)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FKylianVermeulen%2FArboreal%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/KylianVermeulen/Arboreal)
+
 A tree-structured drag-and-drop library for iOS. UIKit handles the heavy lifting for smooth, native interactions. SwiftUI gets a thin bridge layer so you can drop it into your views with a single component.
 
 ## Features
