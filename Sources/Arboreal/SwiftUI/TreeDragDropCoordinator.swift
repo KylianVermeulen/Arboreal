@@ -220,6 +220,19 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             return UIDropProposal(operation: .forbidden)
         }
 
+        // Restrict non-container nodes from being dropped at root level
+        if view.configuration.restrictDropToContainers,
+           case .atIndex(parentID: nil, _) = target {
+            let hasNonContainer = draggedIDs.contains { id in
+                guard let node = tree.findNode(id: id) else { return false }
+                return !node.content.isContainer
+            }
+            if hasNonContainer {
+                containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: nil))
+                return UIDropProposal(operation: .forbidden)
+            }
+        }
+
         // Check granular drop validation
         if let canDropInto = view.configuration.canDropIntoSection,
            case .intoSection(let parentID) = target,

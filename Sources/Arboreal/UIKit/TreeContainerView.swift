@@ -284,7 +284,7 @@ where Content: Sendable, Content.ID: Sendable {
         let allowInto = entry.depth == 0
             && !entry.isExpanded
             && !draggedIDs.contains(entry.id)
-            && (entry.hasChildren || (entry.content.isContainer && !configuration.restrictDropToContainers))
+            && (entry.hasChildren || entry.content.isContainer)
 
         let target: DropTarget<Content>
 

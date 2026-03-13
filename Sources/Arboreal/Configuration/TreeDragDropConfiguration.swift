@@ -22,7 +22,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
 
     /// Whether dropping is enabled. Defaults to `true`.
     public var dropEnabled: Bool
-    /// When `true`, items can only be dropped into container nodes. Defaults to `false`.
+    /// When `true`, non-container nodes cannot be dropped at root level and must remain inside a container. Defaults to `false`.
     public var restrictDropToContainers: Bool
     /// Optional predicate controlling whether a payload can be dropped into a specific section.
     public var canDropIntoSection: (@MainActor @Sendable (Content, DragPayload<Content>) -> Bool)?
