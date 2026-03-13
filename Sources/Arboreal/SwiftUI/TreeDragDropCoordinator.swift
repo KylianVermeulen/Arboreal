@@ -1,6 +1,10 @@
 import UIKit
 import SwiftUI
 
+/// Coordinator that bridges UIKit drag-and-drop interactions to the SwiftUI tree binding.
+///
+/// Created internally by ``TreeDragDropView``. Public only because UIKit delegate
+/// conformances require it.
 @MainActor
 public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent: View>: NSObject, UIDragInteractionDelegate, UIDropInteractionDelegate where Content: Sendable, Content.ID: Sendable {
 
@@ -87,30 +91,11 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
     }
 
     public func dragInteraction(_ interaction: UIDragInteraction, previewForLifting item: UIDragItem, session: any UIDragSession) -> UITargetedDragPreview? {
-        guard let containerView else { return nil }
-        let location = session.location(in: containerView)
-
-        if let customPreview = view.configuration.dragPreview,
-           let entry = containerView.entry(at: location) {
-            let previewView = customPreview(entry.content, entry.depth)
-            let hostingController = UIHostingController(rootView: previewView)
-            hostingController.view.sizeToFit()
-            let center = CGPoint(x: hostingController.view.bounds.midX, y: hostingController.view.bounds.midY)
-            let target = UIDragPreviewTarget(container: containerView, center: center)
-            return UITargetedDragPreview(view: hostingController.view, parameters: UIDragPreviewParameters(), target: target)
-        }
-
         // Floating view was already created in itemsForBeginning
         return nil
     }
 
     public func dragInteraction(_ interaction: UIDragInteraction, willAnimateLiftWith animator: any UIDragAnimating, session: any UIDragSession) {
-        // Allow consumer to customize lift animation
-        if let customLift = view.configuration.liftAnimationProvider {
-            customLift(animator)
-            return
-        }
-
         // Hide the original cell immediately; the floating view is the visual representation
         liftingCell?.isHidden = true
 

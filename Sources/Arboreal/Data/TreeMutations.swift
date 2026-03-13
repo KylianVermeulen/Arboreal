@@ -1,5 +1,8 @@
 extension Array {
-    /// Extracts nodes with the given IDs from the tree, returning the modified tree and extracted nodes.
+    /// Extracts nodes with the given IDs from the tree.
+    ///
+    /// - Parameter ids: The identifiers of nodes to extract.
+    /// - Returns: A tuple of the remaining tree and the extracted nodes.
     public func extractingNodes<Content: TreeNodeContent>(
         ids: Set<Content.ID>
     ) -> (remaining: [TreeNode<Content>], extracted: [TreeNode<Content>]) where Element == TreeNode<Content> {
@@ -25,6 +28,11 @@ extension Array {
     }
 
     /// Inserts nodes at the specified drop target location.
+    ///
+    /// - Parameters:
+    ///   - nodes: The nodes to insert.
+    ///   - target: The ``DropTarget`` specifying where to insert.
+    /// - Returns: A new tree with the nodes inserted.
     public func insertingNodes<Content: TreeNodeContent>(
         _ nodes: [TreeNode<Content>],
         at target: DropTarget<Content>
@@ -45,8 +53,14 @@ extension Array {
         }
     }
 
-    /// Performs a complete move operation: extract then insert.
-    /// Handles index adjustment when dragged nodes shift child indices.
+    /// Moves nodes to a new location in the tree.
+    ///
+    /// Extracts the nodes, adjusts indices to account for the removal, then reinserts.
+    ///
+    /// - Parameters:
+    ///   - ids: The identifiers of nodes to move.
+    ///   - target: The ``DropTarget`` specifying the destination.
+    /// - Returns: A new tree with the nodes moved.
     public func movingNodes<Content: TreeNodeContent>(
         ids: Set<Content.ID>,
         to target: DropTarget<Content>
@@ -86,7 +100,12 @@ extension Array {
         }
     }
 
-    /// Checks if a drop would create a cycle (dropping a parent into its own descendant).
+    /// Checks whether a drop is valid, preventing cycles and depth violations.
+    ///
+    /// - Parameters:
+    ///   - draggedIDs: The identifiers of the nodes being dragged.
+    ///   - target: The proposed drop target.
+    /// - Returns: `true` if the drop is allowed, `false` if it would create a cycle or exceed max depth.
     public func canDrop<Content: TreeNodeContent>(
         draggedIDs: Set<Content.ID>,
         onto target: DropTarget<Content>

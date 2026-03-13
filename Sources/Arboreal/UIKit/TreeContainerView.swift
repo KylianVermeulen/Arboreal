@@ -1,6 +1,9 @@
 import UIKit
 import SwiftUI
 
+/// UIScrollView subclass that performs frame-based layout and rendering of tree rows.
+///
+/// Managed internally by ``TreeDragDropView``. Not intended for direct use.
 @MainActor
 public final class TreeContainerView<Content: TreeNodeContent>: UIScrollView
 where Content: Sendable, Content.ID: Sendable {

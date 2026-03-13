@@ -1,3 +1,4 @@
+/// The target location for a drop operation within the tree.
 public enum DropTarget<Content: TreeNodeContent>: Sendable, Equatable {
     /// Insert at a specific index among the children of a parent node.
     /// `parentID` is nil for root-level insertion.

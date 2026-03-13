@@ -1,5 +1,15 @@
 import SwiftUI
 
+/// A SwiftUI view that displays a tree of nodes with drag-and-drop reordering.
+///
+/// This is the main entry point for using Arboreal in SwiftUI. It bridges to a UIKit-based
+/// scroll view for high-performance layout and native drag-and-drop interactions.
+///
+/// ```swift
+/// TreeDragDropView(tree: $tree, expansionState: expansionState) { item, depth, isSelected, isExpanded in
+///     Text(item.title)
+/// }
+/// ```
 public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIViewRepresentable where Content: Sendable, Content.ID: Sendable {
     @Binding var tree: [TreeNode<Content>]
     @Binding var selectedIDs: Set<Content.ID>
@@ -7,6 +17,15 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
     var configuration: TreeDragDropConfiguration<Content>
     @ViewBuilder var cellContent: @MainActor (Content, Int, Bool, Bool) -> CellContent
 
+    /// Creates a tree drag-and-drop view with selection tracking.
+    ///
+    /// - Parameters:
+    ///   - tree: A binding to the array of root nodes.
+    ///   - selectedIDs: A binding to the set of selected node identifiers.
+    ///   - expansionState: The observable state tracking which nodes are expanded.
+    ///   - configuration: Configuration for layout, behavior, and callbacks.
+    ///   - cellContent: A view builder that produces the content for each row.
+    ///     Parameters are: content, depth, isSelected, isExpanded.
     public init(
         tree: Binding<[TreeNode<Content>]>,
         selectedIDs: Binding<Set<Content.ID>>,
@@ -21,6 +40,14 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
         self.cellContent = cellContent
     }
 
+    /// Creates a tree drag-and-drop view without selection tracking.
+    ///
+    /// - Parameters:
+    ///   - tree: A binding to the array of root nodes.
+    ///   - expansionState: The observable state tracking which nodes are expanded.
+    ///   - configuration: Configuration for layout, behavior, and callbacks.
+    ///   - cellContent: A view builder that produces the content for each row.
+    ///     Parameters are: content, depth, isSelected, isExpanded.
     public init(
         tree: Binding<[TreeNode<Content>]>,
         expansionState: ExpansionState<Content.ID>,
