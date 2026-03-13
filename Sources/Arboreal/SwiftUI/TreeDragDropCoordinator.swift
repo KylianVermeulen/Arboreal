@@ -37,7 +37,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
     // MARK: - Entry Updates
 
     func updateEntries() {
-        let entries = flattenTree(tree, expansionState: expansionState.expandedIDs)
+        let entries = tree.flattened(expansionState: expansionState.expandedIDs)
         containerView?.updateEntries(entries)
     }
 
@@ -198,7 +198,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             return UIDropProposal(operation: .cancel)
         }
 
-        let draggedIDs = draggedIDSet(from: payload)
+        let draggedIDs = payload.draggedIDs
         let previousTarget = containerView.dragState.currentTarget
 
         // Early out if target hasn't changed — avoid redundant work
@@ -210,18 +210,18 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         let targetRefersToSelf: Bool
         switch target {
         case .atIndex(let parentID, let index):
-            if let parentID, (draggedIDs.contains(parentID) || draggedIDs.contains(where: { isDescendant(parentID, of: $0, in: tree) })) {
+            if let parentID, (draggedIDs.contains(parentID) || draggedIDs.contains(where: { tree.isDescendant(parentID, of: $0) })) {
                 targetRefersToSelf = true
             } else {
                 // Check if the child at this index (or index-1) is a dragged node
-                let sibs = siblings(ofParent: parentID, in: tree)
+                let sibs = tree.siblings(ofParent: parentID)
                 let refersAtIndex = index < sibs.count && draggedIDs.contains(sibs[index].id)
                 let refersBeforeIndex = index > 0 && index <= sibs.count && draggedIDs.contains(sibs[index - 1].id)
                 targetRefersToSelf = refersAtIndex || refersBeforeIndex
             }
         case .intoSection(let id):
             targetRefersToSelf = draggedIDs.contains(id)
-                || draggedIDs.contains(where: { isDescendant(id, of: $0, in: tree) })
+                || draggedIDs.contains(where: { tree.isDescendant(id, of: $0) })
         }
 
         if targetRefersToSelf {
@@ -230,7 +230,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         }
 
         // Check cycle prevention / depth enforcement
-        guard canDrop(in: tree, draggedIDs: draggedIDs, onto: target) else {
+        guard tree.canDrop(draggedIDs: draggedIDs, onto: target) else {
             containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: nil))
             return UIDropProposal(operation: .forbidden)
         }
@@ -238,7 +238,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         // Check granular drop validation
         if let canDropInto = view.configuration.canDropIntoSection,
            case .intoSection(let parentID) = target,
-           let parentNode = findNode(id: parentID, in: tree) {
+           let parentNode = tree.findNode(id: parentID) {
             if !canDropInto(parentNode.content, payload) {
                 containerView.transitionDragState(to: .dragging(payload: payload, currentTarget: nil))
                 return UIDropProposal(operation: .forbidden)
@@ -247,7 +247,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
 
         if let canDropBetween = view.configuration.canDropBetween,
            case .atIndex(let parentID, let index) = target {
-            let sibs = siblings(ofParent: parentID, in: tree)
+            let sibs = tree.siblings(ofParent: parentID)
             let before = index > 0 ? sibs[index - 1].content : nil
             let after = index < sibs.count ? sibs[index].content : nil
             if !canDropBetween(before, after, payload) {
@@ -282,10 +282,10 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
 
         isPerformingDrop = true
 
-        let draggedIDs = draggedIDSet(from: payload)
+        let draggedIDs = payload.draggedIDs
 
         // Perform the mutation
-        let newTree = moveNodes(in: tree, ids: draggedIDs, to: target)
+        let newTree = tree.movingNodes(ids: draggedIDs, to: target)
         view.$tree.wrappedValue = newTree
         tree = newTree
 
@@ -303,7 +303,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         view.configuration.onReorder?(newTree)
 
         // Animate from preview positions to final layout
-        let newEntries = flattenTree(newTree, expansionState: expansionState.expandedIDs)
+        let newEntries = newTree.flattened(expansionState: expansionState.expandedIDs)
         containerView.animateDropCompletion(with: newEntries, draggedIDs: draggedIDs)
 
         isPerformingDrop = false
@@ -356,8 +356,7 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         snapshot.frame = cellFrameInWindow
         snapshot.isUserInteractionEnabled = false
 
-        // Light blue background
-        snapshot.backgroundColor = UIColor(red: 0x1A/255.0, green: 0x40/255.0, blue: 0x78/255.0, alpha: 1)
+        snapshot.backgroundColor = view.configuration.floatingDragBackgroundColor
         snapshot.layer.cornerRadius = 10
         snapshot.clipsToBounds = false
 

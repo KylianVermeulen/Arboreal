@@ -3,7 +3,7 @@ public struct TreeNode<Content: TreeNodeContent>: Identifiable, Sendable {
     public var content: Content
     public var children: [TreeNode<Content>]
 
-    public var descendantCount: Int { children.count }
+    public var childCount: Int { children.count }
 
     public init(content: Content, children: [TreeNode<Content>] = []) {
         self.id = content.id

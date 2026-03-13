@@ -21,6 +21,19 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
         self.cellContent = cellContent
     }
 
+    public init(
+        tree: Binding<[TreeNode<Content>]>,
+        expansionState: ExpansionState<Content.ID>,
+        configuration: TreeDragDropConfiguration<Content> = .init(),
+        @ViewBuilder cellContent: @escaping @MainActor (Content, Int, Bool, Bool) -> CellContent
+    ) {
+        self._tree = tree
+        self._selectedIDs = .constant(Set())
+        self.expansionState = expansionState
+        self.configuration = configuration
+        self.cellContent = cellContent
+    }
+
     public func makeUIView(context: Context) -> TreeContainerView<Content> {
         let view = TreeContainerView<Content>(frame: .zero)
         view.configuration = configuration

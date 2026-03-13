@@ -17,7 +17,7 @@ func computePreviewLayout<Content: TreeNodeContent>(
     rowHeight: CGFloat
 ) -> PreviewLayout<Content> {
     // Collect dragged IDs (including visible children)
-    let topLevelIDs = draggedIDSet(from: payload)
+    let topLevelIDs = payload.draggedIDs
     var draggedIDs = Set<Content.ID>()
 
     for entry in entries {
@@ -163,13 +163,6 @@ func visibleRowCount<Content: TreeNodeContent>(
             total += visibleSubtreeCount(for: id, in: entries)
         }
         return max(total, 1)
-    }
-}
-
-func draggedIDSet<Content: TreeNodeContent>(from payload: DragPayload<Content>) -> Set<Content.ID> {
-    switch payload {
-    case .singleItem(let id), .section(let id): [id]
-    case .multipleItems(let ids): ids
     }
 }
 

@@ -26,17 +26,17 @@ struct TreeNodeTests {
         #expect(tree.children[1].id == "child2")
     }
 
-    @Test("Leaf node has zero descendants")
-    func leafDescendantCount() {
+    @Test("Leaf node has zero children")
+    func leafChildCount() {
         let leaf = node("leaf")
-        #expect(leaf.descendantCount == 0)
+        #expect(leaf.childCount == 0)
     }
 
-    @Test("Descendant count equals children count")
-    func descendantCount() {
+    @Test("Child count equals children count")
+    func childCount() {
         let tree = node("root", children: [node("A"), node("B")])
-        #expect(tree.descendantCount == 2)
-        #expect(tree.children[0].descendantCount == 0)
+        #expect(tree.childCount == 2)
+        #expect(tree.children[0].childCount == 0)
     }
 
     @Test("Grandchildren are stripped on construction")

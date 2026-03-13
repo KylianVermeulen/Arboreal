@@ -15,12 +15,15 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
 
     // MARK: - Drop Behavior
     public var dropEnabled: Bool
-    public var canDropIntoContainersOnly: Bool
+    public var restrictDropToContainers: Bool
     public var canDropIntoSection: (@MainActor @Sendable (Content, DragPayload<Content>) -> Bool)?
     public var canDropBetween: (@MainActor @Sendable (Content?, Content?, DragPayload<Content>) -> Bool)?
 
     // MARK: - Drop Indicator
     public var dropPreviewTheme: DropPreviewTheme
+
+    // MARK: - Floating Drag View
+    public var floatingDragBackgroundColor: UIColor
 
     // MARK: - Haptics
     public var hapticConfiguration: HapticConfiguration
@@ -39,18 +42,26 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
         dragEnabled: Bool = true,
         multiSelectDragEnabled: Bool = true,
         dropEnabled: Bool = true,
-        canDropIntoContainersOnly: Bool = false,
+        restrictDropToContainers: Bool = false,
         dropPreviewTheme: DropPreviewTheme = .default,
-        hapticConfiguration: HapticConfiguration = .default
+        floatingDragBackgroundColor: UIColor = UIColor(red: 0x1A/255.0, green: 0x40/255.0, blue: 0x78/255.0, alpha: 1),
+        hapticConfiguration: HapticConfiguration = .default,
+        canDrag: (@MainActor @Sendable (Content) -> Bool)? = nil,
+        onReorder: (@MainActor @Sendable ([TreeNode<Content>]) -> Void)? = nil,
+        onDropCompleted: (@MainActor @Sendable (DragPayload<Content>, DropTarget<Content>) -> Void)? = nil
     ) {
         self.rowHeight = rowHeight
         self.indentationWidth = indentationWidth
         self.dragEnabled = dragEnabled
         self.multiSelectDragEnabled = multiSelectDragEnabled
         self.dropEnabled = dropEnabled
-        self.canDropIntoContainersOnly = canDropIntoContainersOnly
+        self.restrictDropToContainers = restrictDropToContainers
         self.dropPreviewTheme = dropPreviewTheme
+        self.floatingDragBackgroundColor = floatingDragBackgroundColor
         self.hapticConfiguration = hapticConfiguration
+        self.canDrag = canDrag
+        self.onReorder = onReorder
+        self.onDropCompleted = onDropCompleted
     }
 }
 

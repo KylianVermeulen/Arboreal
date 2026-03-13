@@ -13,6 +13,7 @@ where Content: Sendable, Content.ID: Sendable {
     private(set) var dragState: DragState<Content> = .idle
     private var activePreviewLayout: PreviewLayout<Content>?
     private var isAnimatingDropCompletion = false
+    #if DEBUG
     private var debugLabel: UILabel = {
         let l = UILabel()
         l.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
@@ -22,6 +23,7 @@ where Content: Sendable, Content.ID: Sendable {
         l.layer.zPosition = 9999
         return l
     }()
+    #endif
 
     // MARK: - Configuration
 
@@ -47,7 +49,9 @@ where Content: Sendable, Content.ID: Sendable {
     private func setup() {
         layer.addSublayer(dropIndicatorLayer)
         alwaysBounceVertical = true
+        #if DEBUG
         addSubview(debugLabel)
+        #endif
     }
 
     func installInteractions(dragDelegate: (any UIDragInteractionDelegate)?, dropDelegate: (any UIDropInteractionDelegate)?) {
@@ -242,13 +246,15 @@ where Content: Sendable, Content.ID: Sendable {
 
     func resolveDropTarget(at point: CGPoint, payload: DragPayload<Content>?) -> DropTarget<Content>? {
         let isDraggingRootContent = payload.map { isDraggingRootOnlyContent($0) } ?? false
-        let draggedIDs = payload.map { draggedIDSet(from: $0) } ?? []
+        let draggedIDs = payload?.draggedIDs ?? []
 
         // When dragging sections, use whole section groups (header + children)
         // as hit zones: top 50% = before, bottom 50% = after.
         if isDraggingRootContent {
             let target = resolveSectionDropTarget(at: point, draggedIDs: draggedIDs)
+            #if DEBUG
             updateDebugLabel(target)
+            #endif
             return target
         }
 
@@ -261,7 +267,9 @@ where Content: Sendable, Content.ID: Sendable {
             }
             let raw = DropTarget<Content>.atIndex(parentID: nil, index: rootCount)
             let resolved = redirectRootTarget(raw)
+            #if DEBUG
             updateDebugLabel(resolved)
+            #endif
             return resolved
         }
 
@@ -273,7 +281,7 @@ where Content: Sendable, Content.ID: Sendable {
         let allowInto = entry.depth == 0
             && !entry.isExpanded
             && !draggedIDs.contains(entry.id)
-            && (entry.hasChildren || (entry.content.isContainer && !configuration.canDropIntoContainersOnly))
+            && (entry.hasChildren || (entry.content.isContainer && !configuration.restrictDropToContainers))
 
         let target: DropTarget<Content>
 
@@ -303,7 +311,9 @@ where Content: Sendable, Content.ID: Sendable {
         }
 
         let resolved = redirectRootTarget(target)
+        #if DEBUG
         updateDebugLabel(resolved)
+        #endif
         return resolved
     }
 
@@ -384,7 +394,7 @@ where Content: Sendable, Content.ID: Sendable {
     /// Returns true if the payload contains nodes that must stay at root level
     /// (containers or nodes with children).
     private func isDraggingRootOnlyContent(_ payload: DragPayload<Content>) -> Bool {
-        let ids = draggedIDSet(from: payload)
+        let ids = payload.draggedIDs
         return ids.contains { id in
             guard let entry = flatEntries.first(where: { $0.id == id }) else { return false }
             return entry.depth == 0 && (entry.hasChildren || entry.content.isContainer)
@@ -423,6 +433,7 @@ where Content: Sendable, Content.ID: Sendable {
         return target
     }
 
+    #if DEBUG
     private func updateDebugLabel(_ target: DropTarget<Content>) {
         switch target {
         case .atIndex(let parentID, let index):
@@ -433,6 +444,7 @@ where Content: Sendable, Content.ID: Sendable {
         debugLabel.sizeToFit()
         debugLabel.frame.origin = CGPoint(x: 8, y: contentOffset.y + 8)
     }
+    #endif
 
     // MARK: - Frame Calculations
 
