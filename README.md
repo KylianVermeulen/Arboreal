@@ -8,6 +8,7 @@ A tree-structured drag-and-drop library for iOS. UIKit handles the heavy lifting
 ## Features
 
 - Drag and drop to reorder items within and across sections
+- Self-sizing rows based on SwiftUI content
 - Multi-selection drag support
 - Collapsible sections with observable expansion state
 - Live drop preview indicator with customizable theming
@@ -35,7 +36,7 @@ Or add it to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/kylianvermeulen/Arboreal.git", from: "0.1.0")
+    .package(url: "https://github.com/kylianvermeulen/Arboreal.git", from: "0.2.0")
 ]
 ```
 
