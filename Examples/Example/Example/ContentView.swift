@@ -98,6 +98,7 @@ struct ContentView: View {
             switch item {
             case .section(let id, let title):
                 SectionRowView(title: title, isExpanded: isExpanded)
+                    .frame(height: 40)
                     .onTapGesture {
                         expansionState.toggle(id)
                     }
@@ -107,6 +108,7 @@ struct ContentView: View {
                     title: title,
                     isCompleted: isCompleted
                 )
+                .frame(height: 40)
                 .onTapGesture {
                     toggleCompletion(id: id)
                 }
@@ -137,9 +139,7 @@ struct ContentView: View {
 extension TreeDragDropConfiguration where Content == OutlineItem {
     static var exampleConfiguration: TreeDragDropConfiguration {
         var config = TreeDragDropConfiguration()
-        config.rowHeight = 44
         config.indentationWidth = 0
-        config.restrictDropToContainers = true
         config.dropPreviewTheme = DropPreviewTheme(
             fillColor: Color(red: 0x16/255.0, green: 0x20/255.0, blue: 0x2C/255.0),
             borderColor: nil,

@@ -33,9 +33,13 @@ where Content: Sendable, Content.ID: Sendable {
     var configuration: TreeDragDropConfiguration<Content> = .init()
     var cellContentProvider: (@MainActor (FlatTreeEntry<Content>) -> AnyView)?
 
-    // MARK: - Layout Constants
+    // MARK: - Height Measurement
 
-    private var contentHeight: CGFloat { CGFloat(flatEntries.count) * configuration.rowHeight }
+    private var heightCache: [Content.ID: CGFloat] = [:]
+    private var rowHeights: [CGFloat] = []
+    private var cumulativeHeights: [CGFloat] = [0]
+    private var lastMeasuredWidth: CGFloat = 0
+    private let measurementController = UIHostingController<AnyView>(rootView: AnyView(EmptyView()))
 
     // MARK: - Init
 
@@ -68,6 +72,86 @@ where Content: Sendable, Content.ID: Sendable {
         }
     }
 
+    // MARK: - Height Measurement Helpers
+
+    private func measureHeight(for entry: FlatTreeEntry<Content>) -> CGFloat {
+        guard let provider = cellContentProvider else { return configuration.estimatedRowHeight }
+        let indent = CGFloat(entry.depth) * configuration.indentationWidth
+        let availableWidth = bounds.width - indent
+        guard availableWidth > 0 else { return configuration.estimatedRowHeight }
+        measurementController.rootView = provider(entry)
+        measurementController.view.frame = CGRect(x: 0, y: 0, width: availableWidth, height: 0)
+        let size = measurementController.sizeThatFits(in: CGSize(width: availableWidth, height: .greatestFiniteMagnitude))
+        return max(size.height, 1)
+    }
+
+    private func measureHeightsIfNeeded() {
+        guard bounds.width > 0 else { return }
+
+        // Invalidate entire cache if width changed
+        if lastMeasuredWidth != bounds.width {
+            heightCache.removeAll()
+            lastMeasuredWidth = bounds.width
+        }
+
+        var needsRebuild = false
+        for entry in flatEntries {
+            if heightCache[entry.id] == nil {
+                heightCache[entry.id] = measureHeight(for: entry)
+                needsRebuild = true
+            }
+        }
+
+        if needsRebuild || rowHeights.count != flatEntries.count {
+            rebuildCumulativeHeights()
+        }
+    }
+
+    private func rebuildCumulativeHeights() {
+        rowHeights = flatEntries.map { heightCache[$0.id] ?? configuration.estimatedRowHeight }
+        cumulativeHeights = [0]
+        cumulativeHeights.reserveCapacity(flatEntries.count + 1)
+        var sum: CGFloat = 0
+        for h in rowHeights {
+            sum += h
+            cumulativeHeights.append(sum)
+        }
+    }
+
+    private var contentHeight: CGFloat {
+        cumulativeHeights.last ?? 0
+    }
+
+    private func yPositionForIndex(_ index: Int) -> CGFloat {
+        guard index >= 0, index < cumulativeHeights.count else { return 0 }
+        return cumulativeHeights[index]
+    }
+
+    private func heightForIndex(_ index: Int) -> CGFloat {
+        guard index >= 0, index < rowHeights.count else { return configuration.estimatedRowHeight }
+        return rowHeights[index]
+    }
+
+    func heightForEntryID(_ id: Content.ID) -> CGFloat {
+        heightCache[id] ?? configuration.estimatedRowHeight
+    }
+
+    /// Binary search on cumulativeHeights to find the row index at a given Y position.
+    private func indexForYPosition(_ y: CGFloat) -> Int {
+        guard !cumulativeHeights.isEmpty else { return 0 }
+        var lo = 0
+        var hi = cumulativeHeights.count - 1
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if cumulativeHeights[mid + 1] <= y {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        return min(lo, flatEntries.count - 1)
+    }
+
     // MARK: - Data Updates
 
     func updateEntries(_ newEntries: [FlatTreeEntry<Content>]) {
@@ -89,12 +173,22 @@ where Content: Sendable, Content.ID: Sendable {
             return nil
         })
 
-        // Recycle removed cells
+        // Recycle removed cells and invalidate height cache for removed entries
         for id in removedIDs {
             cellPool.recycle(for: AnyHashable(id))
+            heightCache.removeValue(forKey: id)
         }
 
-        // Update content size and layout
+        // Invalidate cache for entries whose content changed
+        let oldContentByID = Dictionary(oldEntries.map { ($0.id, $0.content) }, uniquingKeysWith: { _, new in new })
+        for entry in newEntries {
+            if let oldContent = oldContentByID[entry.id], oldContent != entry.content {
+                heightCache.removeValue(forKey: entry.id)
+            }
+        }
+
+        // Measure heights and update content size
+        measureHeightsIfNeeded()
         contentSize = CGSize(width: bounds.width, height: contentHeight)
         layoutVisibleCells()
     }
@@ -103,6 +197,7 @@ where Content: Sendable, Content.ID: Sendable {
 
     override public func layoutSubviews() {
         super.layoutSubviews()
+        measureHeightsIfNeeded()
         contentSize = CGSize(width: bounds.width, height: contentHeight)
         layoutVisibleCells()
     }
@@ -120,18 +215,18 @@ where Content: Sendable, Content.ID: Sendable {
         // Skip cell recycling during active drag to avoid jitter
         let isDragging = dragState.isDragging
 
-        let visibleRect = CGRect(
-            x: 0,
-            y: contentOffset.y,
-            width: bounds.width,
-            height: bounds.height
-        )
+        let visibleMinY = contentOffset.y
+        let visibleMaxY = contentOffset.y + bounds.height
 
-        let firstVisible = max(0, Int(floor(visibleRect.minY / configuration.rowHeight)))
-        let lastVisible = min(
-            flatEntries.count - 1, Int(ceil(visibleRect.maxY / configuration.rowHeight)))
+        // Binary search for first visible index
+        let firstVisible = max(0, indexForYPosition(visibleMinY))
+        var lastVisible = firstVisible
+        for i in firstVisible..<flatEntries.count {
+            if yPositionForIndex(i) > visibleMaxY { break }
+            lastVisible = i
+        }
 
-        guard firstVisible <= lastVisible else {
+        guard firstVisible <= lastVisible, !flatEntries.isEmpty else {
             if !isDragging {
                 cellPool.recycleAll(except: [])
             }
@@ -151,9 +246,9 @@ where Content: Sendable, Content.ID: Sendable {
             let indent = CGFloat(entry.depth) * configuration.indentationWidth
             let cellFrame = CGRect(
                 x: indent,
-                y: CGFloat(index) * configuration.rowHeight,
+                y: yPositionForIndex(index),
                 width: bounds.width - indent,
-                height: configuration.rowHeight
+                height: heightForIndex(index)
             )
 
             // Reset visual state before setting frame — UIKit frame is
@@ -183,6 +278,7 @@ where Content: Sendable, Content.ID: Sendable {
 
         for entry in flatEntries {
             let key = AnyHashable(entry.id)
+            let entryHeight = heightForEntryID(entry.id)
 
             if preview.draggedIDs.contains(entry.id) {
                 // Children are collapsed via alpha; section is hidden by floating view
@@ -195,9 +291,9 @@ where Content: Sendable, Content.ID: Sendable {
             guard let yPosition = preview.entryYPositions[entry.id] else { continue }
 
             // Check if within visible rect (with buffer)
-            let visibleMinY = contentOffset.y - configuration.rowHeight
-            let visibleMaxY = contentOffset.y + bounds.height + configuration.rowHeight
-            guard yPosition + configuration.rowHeight > visibleMinY,
+            let visibleMinY = contentOffset.y - entryHeight
+            let visibleMaxY = contentOffset.y + bounds.height + entryHeight
+            guard yPosition + entryHeight > visibleMinY,
                   yPosition < visibleMaxY else { continue }
 
             let cell = cellPool.dequeue(for: key)
@@ -210,7 +306,7 @@ where Content: Sendable, Content.ID: Sendable {
                 x: indent,
                 y: yPosition,
                 width: bounds.width - indent,
-                height: configuration.rowHeight
+                height: entryHeight
             )
 
             if cell.superview == nil {
@@ -225,9 +321,10 @@ where Content: Sendable, Content.ID: Sendable {
 
     // MARK: - Hit Testing
 
-    /// Returns the index of the entry at a given Y position. O(1).
+    /// Returns the index of the entry at a given Y position. O(log n) via binary search.
     func entryIndex(at point: CGPoint) -> Int? {
-        let index = Int(floor(point.y / configuration.rowHeight))
+        guard !flatEntries.isEmpty, point.y >= 0, point.y < contentHeight else { return nil }
+        let index = indexForYPosition(point.y)
         guard index >= 0, index < flatEntries.count else { return nil }
         return index
     }
@@ -277,7 +374,7 @@ where Content: Sendable, Content.ID: Sendable {
         }
 
         let relativeY = point.y - rowTop
-        let fraction = relativeY / configuration.rowHeight
+        let fraction = relativeY / heightForEntryID(entry.id)
 
         // Only depth-0 nodes can be drop-into targets (max depth 1).
         // Never allow dropping into a node that is itself being dragged.
@@ -331,22 +428,23 @@ where Content: Sendable, Content.ID: Sendable {
             let visibleRoots = flatEntries.filter { $0.depth == 0 && !preview.draggedIDs.contains($0.id) }
             for root in visibleRoots {
                 guard let rootY = preview.entryYPositions[root.id] else { continue }
-                var bottomY = rootY + configuration.rowHeight
+                var bottomY = rootY + heightForEntryID(root.id)
                 for child in flatEntries where child.parentID == root.id && !preview.draggedIDs.contains(child.id) {
                     if let childY = preview.entryYPositions[child.id] {
-                        bottomY = max(bottomY, childY + configuration.rowHeight)
+                        bottomY = max(bottomY, childY + heightForEntryID(child.id))
                     }
                 }
                 groups.append((root, rootY, bottomY))
             }
         } else {
             for (rootIdx, root) in flatEntries.enumerated() where root.depth == 0 && !draggedIDs.contains(root.id) {
-                let topY = CGFloat(rootIdx) * configuration.rowHeight
+                let topY = yPositionForIndex(rootIdx)
                 var endIdx = rootIdx + 1
                 while endIdx < flatEntries.count, flatEntries[endIdx].depth > 0 {
                     endIdx += 1
                 }
-                groups.append((root, topY, CGFloat(endIdx) * configuration.rowHeight))
+                let bottomY = yPositionForIndex(endIdx)
+                groups.append((root, topY, bottomY))
             }
         }
 
@@ -381,7 +479,7 @@ where Content: Sendable, Content.ID: Sendable {
             for entry in flatEntries {
                 if preview.draggedIDs.contains(entry.id) { continue }
                 guard let yPos = preview.entryYPositions[entry.id] else { continue }
-                if point.y >= yPos, point.y < yPos + configuration.rowHeight {
+                if point.y >= yPos, point.y < yPos + heightForEntryID(entry.id) {
                     return (entry, yPos)
                 }
             }
@@ -391,7 +489,7 @@ where Content: Sendable, Content.ID: Sendable {
         guard let index = entryIndex(at: point) else { return nil }
         let entry = flatEntries[index]
         if draggedIDs.contains(entry.id) { return nil }
-        return (entry, CGFloat(index) * configuration.rowHeight)
+        return (entry, yPositionForIndex(index))
     }
 
     /// Returns true if the payload contains nodes that must stay at root level
@@ -455,23 +553,24 @@ where Content: Sendable, Content.ID: Sendable {
         switch target {
         case .atIndex(let parentID, let childIndex):
             if let flatIndex = flatIndexForChild(parentID: parentID, childIndex: childIndex) {
-                let y = CGFloat(flatIndex) * configuration.rowHeight
-                return CGRect(x: 0, y: y, width: bounds.width, height: configuration.rowHeight)
+                let y = yPositionForIndex(flatIndex)
+                let h = heightForIndex(flatIndex)
+                return CGRect(x: 0, y: y, width: bounds.width, height: h)
             }
-            let y = CGFloat(flatEntries.count) * configuration.rowHeight
-            return CGRect(x: 0, y: y, width: bounds.width, height: configuration.rowHeight)
+            let y = contentHeight
+            return CGRect(x: 0, y: y, width: bounds.width, height: configuration.estimatedRowHeight)
 
         case .intoSection(let id):
             if let index = flatEntries.firstIndex(where: { $0.id == id }) {
                 let indent = CGFloat(flatEntries[index].depth) * configuration.indentationWidth
                 return CGRect(
                     x: indent,
-                    y: CGFloat(index) * configuration.rowHeight,
+                    y: yPositionForIndex(index),
                     width: bounds.width - indent,
-                    height: configuration.rowHeight
+                    height: heightForIndex(index)
                 )
             }
-            return CGRect(x: 0, y: 0, width: bounds.width, height: configuration.rowHeight)
+            return CGRect(x: 0, y: 0, width: bounds.width, height: configuration.estimatedRowHeight)
         }
     }
 
@@ -527,9 +626,9 @@ where Content: Sendable, Content.ID: Sendable {
                 let inset = theme.horizontalPadding
                 let rect = CGRect(
                     x: inset,
-                    y: CGFloat(sectionIndex) * configuration.rowHeight,
+                    y: yPositionForIndex(sectionIndex),
                     width: bounds.width - inset * 2,
-                    height: configuration.rowHeight
+                    height: heightForIndex(sectionIndex)
                 )
                 dropIndicatorLayer.update(
                     for: rect,
@@ -546,7 +645,7 @@ where Content: Sendable, Content.ID: Sendable {
             entries: flatEntries,
             target: target,
             payload: payload,
-            rowHeight: configuration.rowHeight
+            heightForEntry: { self.heightForEntryID($0) }
         )
         activePreviewLayout = layout
 
@@ -568,19 +667,18 @@ where Content: Sendable, Content.ID: Sendable {
     }
 
     private func applyPreviewLayout(_ layout: PreviewLayout<Content>) {
-        let rowHeight = configuration.rowHeight
-
         // Find the Y position of the dragged section for child collapse animation
         var draggedSectionY: CGFloat?
         for (idx, entry) in flatEntries.enumerated() {
             if entry.depth == 0, layout.draggedIDs.contains(entry.id) {
-                draggedSectionY = CGFloat(idx) * rowHeight
+                draggedSectionY = yPositionForIndex(idx)
                 break
             }
         }
 
         for entry in flatEntries {
             let key = AnyHashable(entry.id)
+            let entryHeight = heightForEntryID(entry.id)
             guard let cell = cellPool.cell(for: key) else { continue }
 
             if layout.draggedIDs.contains(entry.id) {
@@ -592,7 +690,7 @@ where Content: Sendable, Content.ID: Sendable {
                         x: 0,
                         y: sectionY,
                         width: bounds.width,
-                        height: rowHeight
+                        height: entryHeight
                     )
                     cell.alpha = 0
                 } else {
@@ -609,7 +707,7 @@ where Content: Sendable, Content.ID: Sendable {
                 x: indent,
                 y: yPosition,
                 width: bounds.width - indent,
-                height: rowHeight
+                height: entryHeight
             )
             cell.isHidden = false
             cell.alpha = 1
@@ -622,13 +720,15 @@ where Content: Sendable, Content.ID: Sendable {
     func animateDropCompletion(with newEntries: [FlatTreeEntry<Content>], draggedIDs topLevelDraggedIDs: Set<Content.ID>) {
         flatEntries = newEntries
         activePreviewLayout = nil
+
+        // Measure new entries and rebuild cumulative heights
+        measureHeightsIfNeeded()
         contentSize = CGSize(width: bounds.width, height: contentHeight)
 
         let newIDs = Set(newEntries.map { AnyHashable($0.id) })
         cellPool.recycleAll(except: newIDs)
 
         let provider = cellContentProvider
-        let rowHeight = configuration.rowHeight
 
         // Expand dragged IDs to include children of dragged sections
         var allDraggedIDs = topLevelDraggedIDs
@@ -641,7 +741,7 @@ where Content: Sendable, Content.ID: Sendable {
         // Find the section header Y for each dragged root so children can expand from it
         var draggedSectionY: [Content.ID: CGFloat] = [:]
         for (index, entry) in newEntries.enumerated() where entry.depth == 0 && topLevelDraggedIDs.contains(entry.id) {
-            draggedSectionY[entry.id] = CGFloat(index) * rowHeight
+            draggedSectionY[entry.id] = yPositionForIndex(index)
         }
 
         // Kill all in-flight animations so starting positions are clean
@@ -657,7 +757,8 @@ where Content: Sendable, Content.ID: Sendable {
             let cell = cellPool.dequeue(for: key)
 
             let indent = CGFloat(entry.depth) * configuration.indentationWidth
-            let finalY = CGFloat(index) * rowHeight
+            let finalY = yPositionForIndex(index)
+            let h = heightForIndex(index)
 
             cell.transform = .identity
             cell.isHidden = false
@@ -665,15 +766,15 @@ where Content: Sendable, Content.ID: Sendable {
             if entry.depth == 0 {
                 // Section header: place at final position immediately
                 cell.alpha = 1
-                cell.frame = CGRect(x: indent, y: finalY, width: bounds.width - indent, height: rowHeight)
+                cell.frame = CGRect(x: indent, y: finalY, width: bounds.width - indent, height: h)
                 bringSubviewToFront(cell)
             } else if let sectionY = entry.parentID.flatMap({ draggedSectionY[$0] }) {
                 // Child: start at section header Y with alpha 0, will expand down
                 cell.alpha = 0
-                cell.frame = CGRect(x: indent, y: sectionY, width: bounds.width - indent, height: rowHeight)
+                cell.frame = CGRect(x: indent, y: sectionY, width: bounds.width - indent, height: h)
             } else {
                 cell.alpha = 1
-                cell.frame = CGRect(x: indent, y: finalY, width: bounds.width - indent, height: rowHeight)
+                cell.frame = CGRect(x: indent, y: finalY, width: bounds.width - indent, height: h)
             }
 
             if cell.superview == nil { addSubview(cell) }
@@ -689,11 +790,13 @@ where Content: Sendable, Content.ID: Sendable {
                 let key = AnyHashable(entry.id)
                 let cell = self.cellPool.dequeue(for: key)
                 let indent = CGFloat(entry.depth) * self.configuration.indentationWidth
+                let y = self.yPositionForIndex(index)
+                let h = self.heightForIndex(index)
 
                 cell.transform = .identity
                 cell.isHidden = false
                 cell.alpha = 1
-                cell.frame = CGRect(x: indent, y: CGFloat(index) * rowHeight, width: self.bounds.width - indent, height: rowHeight)
+                cell.frame = CGRect(x: indent, y: y, width: self.bounds.width - indent, height: h)
 
                 if cell.superview == nil { self.addSubview(cell) }
                 if let provider { cell.configure(with: provider(entry)) }
@@ -721,9 +824,9 @@ where Content: Sendable, Content.ID: Sendable {
                 cell.alpha = 1
                 cell.frame = CGRect(
                     x: indent,
-                    y: CGFloat(index) * self.configuration.rowHeight,
+                    y: self.yPositionForIndex(index),
                     width: self.bounds.width - indent,
-                    height: self.configuration.rowHeight
+                    height: self.heightForIndex(index)
                 )
             }
         }

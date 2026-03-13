@@ -87,7 +87,7 @@ Customize behavior through `TreeDragDropConfiguration`:
 
 ```swift
 var config = TreeDragDropConfiguration<Task>()
-config.rowHeight = 48
+config.estimatedRowHeight = 48
 config.indentationWidth = 24
 config.canDrag = { item in !item.isContainer }
 config.onReorder = { newTree in save(newTree) }

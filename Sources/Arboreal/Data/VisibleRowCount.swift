@@ -14,7 +14,7 @@ func computePreviewLayout<Content: TreeNodeContent>(
     entries: [FlatTreeEntry<Content>],
     target: DropTarget<Content>,
     payload: DragPayload<Content>,
-    rowHeight: CGFloat
+    heightForEntry: (Content.ID) -> CGFloat
 ) -> PreviewLayout<Content> {
     // Collect dragged IDs (including visible children)
     let topLevelIDs = payload.draggedIDs
@@ -33,8 +33,11 @@ func computePreviewLayout<Content: TreeNodeContent>(
         }
     }
 
-    // Gap height = one row per top-level dragged item (children are collapsed in the preview)
-    let draggedRowCount = topLevelIDs.count
+    // Gap height = sum of heights for each top-level dragged item (children are collapsed in the preview)
+    var gapHeight: CGFloat = 0
+    for id in topLevelIDs {
+        gapHeight += heightForEntry(id)
+    }
 
     // Build non-dragged list preserving order
     var nonDragged: [FlatTreeEntry<Content>] = []
@@ -67,16 +70,22 @@ func computePreviewLayout<Content: TreeNodeContent>(
         }
     }
 
-    let gapHeight = CGFloat(draggedRowCount) * rowHeight
-    let gapY = CGFloat(insertionIndex) * rowHeight
-
+    // Compute Y positions using actual entry heights
     var positions: [Content.ID: CGFloat] = [:]
+    var runningY: CGFloat = 0
+    var gapY: CGFloat = 0
+
     for (i, entry) in nonDragged.enumerated() {
-        if i < insertionIndex {
-            positions[entry.id] = CGFloat(i) * rowHeight
-        } else {
-            positions[entry.id] = CGFloat(i) * rowHeight + gapHeight
+        if i == insertionIndex {
+            gapY = runningY
+            runningY += gapHeight
         }
+        positions[entry.id] = runningY
+        runningY += heightForEntry(entry.id)
+    }
+    // If insertion is at the end
+    if insertionIndex >= nonDragged.count {
+        gapY = runningY
     }
 
     return PreviewLayout(
