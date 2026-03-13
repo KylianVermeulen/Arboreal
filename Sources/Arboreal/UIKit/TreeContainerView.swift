@@ -445,7 +445,7 @@ where Content: Sendable, Content.ID: Sendable {
             debugLabel.text = ".intoSection(\(id))"
         }
         debugLabel.sizeToFit()
-        debugLabel.frame.origin = CGPoint(x: 8, y: contentOffset.y + 8)
+        debugLabel.frame.origin = CGPoint(x: 8, y: contentOffset.y + bounds.height - debugLabel.frame.height - 8)
     }
     #endif
 
