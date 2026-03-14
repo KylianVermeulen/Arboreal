@@ -75,10 +75,10 @@ where Content: Sendable, Content.ID: Sendable {
     // MARK: - Height Measurement Helpers
 
     private func measureHeight(for entry: FlatTreeEntry<Content>) -> CGFloat {
-        guard let provider = cellContentProvider else { return configuration.estimatedRowHeight }
+        guard let provider = cellContentProvider else { return 1 }
         let indent = CGFloat(entry.depth) * configuration.indentationWidth
         let availableWidth = bounds.width - indent
-        guard availableWidth > 0 else { return configuration.estimatedRowHeight }
+        guard availableWidth > 0 else { return 1 }
         measurementController.rootView = provider(entry)
         measurementController.view.frame = CGRect(x: 0, y: 0, width: availableWidth, height: 0)
         let size = measurementController.sizeThatFits(in: CGSize(width: availableWidth, height: .greatestFiniteMagnitude))
@@ -108,7 +108,7 @@ where Content: Sendable, Content.ID: Sendable {
     }
 
     private func rebuildCumulativeHeights() {
-        rowHeights = flatEntries.map { heightCache[$0.id] ?? configuration.estimatedRowHeight }
+        rowHeights = flatEntries.map { heightCache[$0.id]! }
         cumulativeHeights = [0]
         cumulativeHeights.reserveCapacity(flatEntries.count + 1)
         var sum: CGFloat = 0
@@ -128,12 +128,12 @@ where Content: Sendable, Content.ID: Sendable {
     }
 
     private func heightForIndex(_ index: Int) -> CGFloat {
-        guard index >= 0, index < rowHeights.count else { return configuration.estimatedRowHeight }
+        guard index >= 0, index < rowHeights.count else { return 0 }
         return rowHeights[index]
     }
 
     func heightForEntryID(_ id: Content.ID) -> CGFloat {
-        heightCache[id] ?? configuration.estimatedRowHeight
+        heightCache[id]!
     }
 
     /// Binary search on cumulativeHeights to find the row index at a given Y position.
@@ -558,7 +558,7 @@ where Content: Sendable, Content.ID: Sendable {
                 return CGRect(x: 0, y: y, width: bounds.width, height: h)
             }
             let y = contentHeight
-            return CGRect(x: 0, y: y, width: bounds.width, height: configuration.estimatedRowHeight)
+            return CGRect(x: 0, y: y, width: bounds.width, height: 0)
 
         case .intoSection(let id):
             if let index = flatEntries.firstIndex(where: { $0.id == id }) {
@@ -570,7 +570,7 @@ where Content: Sendable, Content.ID: Sendable {
                     height: heightForIndex(index)
                 )
             }
-            return CGRect(x: 0, y: 0, width: bounds.width, height: configuration.estimatedRowHeight)
+            return .zero
         }
     }
 

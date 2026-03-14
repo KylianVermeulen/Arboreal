@@ -4,9 +4,6 @@ import SwiftUI
 public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
     // MARK: - Row Sizing
 
-    /// Estimated height for rows before measurement completes. Defaults to 44.
-    /// Actual row heights are determined by measuring each cell's intrinsic content size.
-    public var estimatedRowHeight: CGFloat
     /// The horizontal offset in points applied per depth level. Defaults to 20.
     public var indentationWidth: CGFloat
 
@@ -61,7 +58,6 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
     public var onReorder: (@MainActor @Sendable ([TreeNode<Content>]) -> Void)?
 
     public init(
-        estimatedRowHeight: CGFloat = 44,
         indentationWidth: CGFloat = 20,
         dragEnabled: Bool = true,
         multiSelectDragEnabled: Bool = true,
@@ -74,7 +70,6 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
         onReorder: (@MainActor @Sendable ([TreeNode<Content>]) -> Void)? = nil,
         onDropCompleted: (@MainActor @Sendable (DragPayload<Content>, DropTarget<Content>) -> Void)? = nil
     ) {
-        self.estimatedRowHeight = estimatedRowHeight
         self.indentationWidth = indentationWidth
         self.dragEnabled = dragEnabled
         self.multiSelectDragEnabled = multiSelectDragEnabled
