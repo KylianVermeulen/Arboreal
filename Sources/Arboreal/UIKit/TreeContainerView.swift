@@ -810,6 +810,7 @@ where Content: Sendable, Content.ID: Sendable {
             }
         } completion: { _ in
             self.isAnimatingDropCompletion = false
+            self.layoutVisibleCells()
         }
 
         dropIndicatorLayer.hide()
