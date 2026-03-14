@@ -184,6 +184,7 @@ where Content: Sendable, Content.ID: Sendable {
         for entry in newEntries {
             if let oldContent = oldContentByID[entry.id], oldContent != entry.content {
                 heightCache.removeValue(forKey: entry.id)
+                cellPool.recycle(for: AnyHashable(entry.id))
             }
         }
 
