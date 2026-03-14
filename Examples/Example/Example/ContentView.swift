@@ -97,7 +97,7 @@ struct ContentView: View {
     var body: some View {
         TreeDragDropView(
             tree: tree,
-            selectedIDs: $selectedIDs,
+            selectedIDs: selectedIDs,
             expansionState: expansionState,
             configuration: configuration
         ) { item, depth, isSelected, isExpanded in

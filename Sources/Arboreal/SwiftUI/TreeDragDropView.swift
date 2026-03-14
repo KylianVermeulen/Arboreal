@@ -12,7 +12,7 @@ import SwiftUI
 /// ```
 public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIViewRepresentable where Content: Sendable, Content.ID: Sendable {
     var tree: [TreeNode<Content>]
-    @Binding var selectedIDs: Set<Content.ID>
+    var selectedIDs: Set<Content.ID>
     var expansionState: ExpansionState<Content.ID>
     var configuration: TreeDragDropConfiguration<Content>
     @ViewBuilder var cellContent: @MainActor (Content, Int, Bool, Bool) -> CellContent
@@ -21,20 +21,20 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
     ///
     /// - Parameters:
     ///   - tree: The array of root nodes.
-    ///   - selectedIDs: A binding to the set of selected node identifiers.
+    ///   - selectedIDs: The set of selected node identifiers.
     ///   - expansionState: The observable state tracking which nodes are expanded.
     ///   - configuration: Configuration for layout, behavior, and callbacks.
     ///   - cellContent: A view builder that produces the content for each row.
     ///     Parameters are: content, depth, isSelected, isExpanded.
     public init(
         tree: [TreeNode<Content>],
-        selectedIDs: Binding<Set<Content.ID>>,
+        selectedIDs: Set<Content.ID>,
         expansionState: ExpansionState<Content.ID>,
         configuration: TreeDragDropConfiguration<Content> = .init(),
         @ViewBuilder cellContent: @escaping @MainActor (Content, Int, Bool, Bool) -> CellContent
     ) {
         self.tree = tree
-        self._selectedIDs = selectedIDs
+        self.selectedIDs = selectedIDs
         self.expansionState = expansionState
         self.configuration = configuration
         self.cellContent = cellContent
@@ -55,7 +55,7 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
         @ViewBuilder cellContent: @escaping @MainActor (Content, Int, Bool, Bool) -> CellContent
     ) {
         self.tree = tree
-        self._selectedIDs = .constant(Set())
+        self.selectedIDs = Set()
         self.expansionState = expansionState
         self.configuration = configuration
         self.cellContent = cellContent

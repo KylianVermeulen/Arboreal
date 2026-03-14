@@ -63,6 +63,8 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         let payload: DragPayload<Content>
         if selectedIDs.contains(entry.id) && selectedIDs.count > 1 {
             payload = .multipleItems(selectedIDs)
+        } else if entry.content.isContainer {
+            payload = .section(entry.id)
         } else {
             payload = .singleItem(entry.id)
         }

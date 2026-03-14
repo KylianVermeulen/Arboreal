@@ -5,7 +5,8 @@
       "Bash(xcodebuild build:*)",
       "Bash(xcodebuild test:*)",
       "Bash(xcodebuild -scheme Arboreal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build 2>&1)",
-      "Bash(xcodebuild -scheme Arboreal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test 2>&1)"
+      "Bash(xcodebuild -scheme Arboreal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test 2>&1)",
+      "Bash(xcodebuild:*)"
     ]
   }
 }
