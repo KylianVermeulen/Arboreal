@@ -1,21 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find /Users/kylianvermeulen/Documents/Code/Personal/Arboreal/Sources -type f -name \"*.swift\" 2>/dev/null | head -50)",
-      "Bash(find /Users/kylianvermeulen/Documents/Code/Personal/Arboreal/Tests -type f -name \"*.swift\" 2>/dev/null | head -50)",
-      "WebSearch",
-      "WebFetch(domain:swiftpackageindex.com)",
       "Bash(swift build:*)",
       "Bash(xcodebuild build:*)",
       "Bash(xcodebuild test:*)",
-      "Bash(for f:*)",
-      "Bash(do echo:*)",
-      "Read(//Users/kylianvermeulen/Documents/Code/Personal/Arboreal/.claude/worktrees/agent-a8ed3e0e/**)",
-      "Bash(done)",
-      "Bash(xcodebuild -scheme Arboreal -destination 'platform=iOS Simulator,name=iPhone 16' build 2>&1 | tail -20)",
-      "Bash(xcodebuild -scheme Arboreal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build 2>&1 | tail -5)",
-      "Bash(xcodebuild -scheme Arboreal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test 2>&1 | tail -30)",
-      "Bash(git checkout:*)"
+      "Bash(xcodebuild -scheme Arboreal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build 2>&1)",
+      "Bash(xcodebuild -scheme Arboreal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test 2>&1)"
     ]
   }
 }
