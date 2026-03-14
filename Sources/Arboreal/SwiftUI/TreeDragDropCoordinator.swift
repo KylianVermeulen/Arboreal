@@ -284,7 +284,6 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
 
         // Perform the mutation
         let newTree = tree.movingNodes(ids: draggedIDs, to: target)
-        view.$tree.wrappedValue = newTree
         tree = newTree
 
         // Remove floating drag view

@@ -74,7 +74,7 @@ struct Task: TreeNodeContent {
 
 ```swift
 TreeDragDropView(
-    tree: $tree,
+    tree: tree,
     expansionState: expansionState
 ) { item, depth, isSelected, isExpanded in
     Text(item.title)
@@ -98,7 +98,7 @@ config.dropPreviewTheme = DropPreviewTheme(
 )
 
 TreeDragDropView(
-    tree: $tree,
+    tree: tree,
     expansionState: expansionState,
     configuration: config
 ) { item, depth, isSelected, isExpanded in

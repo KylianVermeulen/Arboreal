@@ -88,12 +88,18 @@ struct ContentView: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var expansionState = ExpansionState<UUID>()
 
+    private var configuration: TreeDragDropConfiguration<OutlineItem> {
+        var config = TreeDragDropConfiguration.exampleConfiguration
+        config.onReorder = { newTree in tree = newTree }
+        return config
+    }
+
     var body: some View {
         TreeDragDropView(
-            tree: $tree,
+            tree: tree,
             selectedIDs: $selectedIDs,
             expansionState: expansionState,
-            configuration: .exampleConfiguration
+            configuration: configuration
         ) { item, depth, isSelected, isExpanded in
             switch item {
             case .section(let id, let title):
