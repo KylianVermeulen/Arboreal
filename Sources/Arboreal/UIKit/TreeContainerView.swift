@@ -619,16 +619,23 @@ where Content: Sendable, Content.ID: Sendable {
         let theme = configuration.dropPreviewTheme
 
         if case .intoSection(let sectionID) = target {
-            // For drop-into-section: highlight the section header instead of creating a gap
-            clearPreviewLayout()
+            // For drop-into-section: highlight the section header instead of creating a gap.
+            // Use a gapless preview layout so dragged cells stay hidden and the gap closes.
+            let layout = computeGaplessPreviewLayout(payload: payload)
+            activePreviewLayout = layout
 
-            if let sectionIndex = flatEntries.firstIndex(where: { $0.id == sectionID }) {
+            UIView.animate(withDuration: 0.25, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
+                self.applyPreviewLayout(layout)
+            }
+
+            if let sectionY = layout.entryYPositions[sectionID] {
+                let sectionHeight = heightForEntryID(sectionID)
                 let inset = theme.horizontalPadding
                 let rect = CGRect(
                     x: inset,
-                    y: yPositionForIndex(sectionIndex),
+                    y: sectionY,
                     width: bounds.width - inset * 2,
-                    height: heightForIndex(sectionIndex)
+                    height: sectionHeight
                 )
                 dropIndicatorLayer.update(
                     for: rect,
@@ -812,11 +819,20 @@ where Content: Sendable, Content.ID: Sendable {
         guard activePreviewLayout != nil else { return }
         activePreviewLayout = nil
 
-        // Restore all cells to normal positions (including previously hidden dragged cells)
+        let activeDraggedIDs = dragState.payload?.draggedIDs ?? []
+
+        // Restore all cells to normal positions (keeping dragged cells hidden)
         UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
             for (index, entry) in self.flatEntries.enumerated() {
                 let key = AnyHashable(entry.id)
                 guard let cell = self.cellPool.cell(for: key) else { continue }
+
+                // Keep dragged cells hidden during active drag
+                if activeDraggedIDs.contains(entry.id)
+                    || (entry.depth == 1 && entry.parentID.map({ activeDraggedIDs.contains($0) }) == true) {
+                    cell.isHidden = true
+                    continue
+                }
 
                 let indent = CGFloat(entry.depth) * self.configuration.indentationWidth
                 cell.transform = .identity
@@ -830,6 +846,35 @@ where Content: Sendable, Content.ID: Sendable {
                 )
             }
         }
+    }
+
+    /// Computes a preview layout that closes the gap left by dragged cells without
+    /// inserting any gap at the target. Used for `.intoSection` drop targets.
+    private func computeGaplessPreviewLayout(payload: DragPayload<Content>) -> PreviewLayout<Content> {
+        let topLevelIDs = payload.draggedIDs
+        var draggedIDs = Set<Content.ID>()
+
+        for entry in flatEntries {
+            if topLevelIDs.contains(entry.id) {
+                draggedIDs.insert(entry.id)
+                if entry.depth == 0, entry.isExpanded {
+                    for other in flatEntries where other.parentID == entry.id {
+                        draggedIDs.insert(other.id)
+                    }
+                }
+            } else if entry.depth == 1, let parentID = entry.parentID, topLevelIDs.contains(parentID) {
+                draggedIDs.insert(entry.id)
+            }
+        }
+
+        var positions: [Content.ID: CGFloat] = [:]
+        var runningY: CGFloat = 0
+        for entry in flatEntries where !draggedIDs.contains(entry.id) {
+            positions[entry.id] = runningY
+            runningY += heightForEntryID(entry.id)
+        }
+
+        return PreviewLayout(entryYPositions: positions, gapY: 0, gapHeight: 0, draggedIDs: draggedIDs)
     }
 
     // MARK: - Drag State Management
