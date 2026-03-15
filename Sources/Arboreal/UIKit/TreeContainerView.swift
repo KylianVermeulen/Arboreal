@@ -116,8 +116,9 @@ where Content: Sendable, Content.ID: Sendable {
         cumulativeHeights = [0]
         cumulativeHeights.reserveCapacity(flatEntries.count + 1)
         var sum: CGFloat = 0
-        for h in rowHeights {
+        for (i, h) in rowHeights.enumerated() {
             sum += h
+            if i < rowHeights.count - 1 { sum += configuration.nodeSpacing }
             cumulativeHeights.append(sum)
         }
     }
@@ -657,7 +658,8 @@ where Content: Sendable, Content.ID: Sendable {
             entries: flatEntries,
             target: target,
             payload: payload,
-            heightForEntry: { self.heightForEntryID($0) }
+            heightForEntry: { self.heightForEntryID($0) },
+            nodeSpacing: configuration.nodeSpacing
         )
         activePreviewLayout = layout
 
@@ -875,9 +877,12 @@ where Content: Sendable, Content.ID: Sendable {
 
         var positions: [Content.ID: CGFloat] = [:]
         var runningY: CGFloat = 0
+        var isFirst = true
         for entry in flatEntries where !draggedIDs.contains(entry.id) {
+            if !isFirst { runningY += configuration.nodeSpacing }
             positions[entry.id] = runningY
             runningY += heightForEntryID(entry.id)
+            isFirst = false
         }
 
         return PreviewLayout(entryYPositions: positions, gapY: 0, gapHeight: 0, draggedIDs: draggedIDs)

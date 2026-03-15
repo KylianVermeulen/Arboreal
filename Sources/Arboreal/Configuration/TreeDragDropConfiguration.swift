@@ -8,6 +8,8 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
     public var indentationWidth: CGFloat
     /// Content insets applied to the scroll view. Defaults to `.zero`.
     public var contentInsets: UIEdgeInsets
+    /// Vertical spacing between rows. Applied between consecutive rows (not after the last). Defaults to `0`.
+    public var nodeSpacing: CGFloat
 
     // MARK: - Drag Behavior
 
@@ -62,6 +64,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
     public init(
         indentationWidth: CGFloat = 20,
         contentInsets: UIEdgeInsets = .zero,
+        nodeSpacing: CGFloat = 0,
         dragEnabled: Bool = true,
         multiSelectDragEnabled: Bool = true,
         dropEnabled: Bool = true,
@@ -75,6 +78,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
     ) {
         self.indentationWidth = indentationWidth
         self.contentInsets = contentInsets
+        self.nodeSpacing = nodeSpacing
         self.dragEnabled = dragEnabled
         self.multiSelectDragEnabled = multiSelectDragEnabled
         self.dropEnabled = dropEnabled

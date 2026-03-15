@@ -146,6 +146,7 @@ extension TreeDragDropConfiguration where Content == OutlineItem {
     static var exampleConfiguration: TreeDragDropConfiguration {
         var config = TreeDragDropConfiguration()
         config.indentationWidth = 0
+        config.nodeSpacing = 6
         config.dropPreviewTheme = DropPreviewTheme(
             fillColor: Color(red: 0x16/255.0, green: 0x20/255.0, blue: 0x2C/255.0),
             borderColor: nil,

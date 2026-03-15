@@ -14,7 +14,8 @@ func computePreviewLayout<Content: TreeNodeContent>(
     entries: [FlatTreeEntry<Content>],
     target: DropTarget<Content>,
     payload: DragPayload<Content>,
-    heightForEntry: (Content.ID) -> CGFloat
+    heightForEntry: (Content.ID) -> CGFloat,
+    nodeSpacing: CGFloat = 0
 ) -> PreviewLayout<Content> {
     // Collect dragged IDs (including visible children)
     let topLevelIDs = payload.draggedIDs
@@ -74,17 +75,23 @@ func computePreviewLayout<Content: TreeNodeContent>(
     var positions: [Content.ID: CGFloat] = [:]
     var runningY: CGFloat = 0
     var gapY: CGFloat = 0
+    var visualIndex = 0
 
     for (i, entry) in nonDragged.enumerated() {
         if i == insertionIndex {
+            if visualIndex > 0 { runningY += nodeSpacing }
             gapY = runningY
             runningY += gapHeight
+            visualIndex += 1
         }
+        if visualIndex > 0 { runningY += nodeSpacing }
         positions[entry.id] = runningY
         runningY += heightForEntry(entry.id)
+        visualIndex += 1
     }
     // If insertion is at the end
     if insertionIndex >= nonDragged.count {
+        if visualIndex > 0 { runningY += nodeSpacing }
         gapY = runningY
     }
 
