@@ -6,6 +6,8 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
 
     /// The horizontal offset in points applied per depth level. Defaults to 20.
     public var indentationWidth: CGFloat
+    /// Content insets applied to the scroll view. Defaults to `.zero`.
+    public var contentInsets: UIEdgeInsets
 
     // MARK: - Drag Behavior
 
@@ -59,6 +61,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
 
     public init(
         indentationWidth: CGFloat = 20,
+        contentInsets: UIEdgeInsets = .zero,
         dragEnabled: Bool = true,
         multiSelectDragEnabled: Bool = true,
         dropEnabled: Bool = true,
@@ -71,6 +74,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
         onDropCompleted: (@MainActor @Sendable (DragPayload<Content>, DropTarget<Content>) -> Void)? = nil
     ) {
         self.indentationWidth = indentationWidth
+        self.contentInsets = contentInsets
         self.dragEnabled = dragEnabled
         self.multiSelectDragEnabled = multiSelectDragEnabled
         self.dropEnabled = dropEnabled

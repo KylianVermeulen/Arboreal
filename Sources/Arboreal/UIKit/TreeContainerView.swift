@@ -30,7 +30,11 @@ where Content: Sendable, Content.ID: Sendable {
 
     // MARK: - Configuration
 
-    var configuration: TreeDragDropConfiguration<Content> = .init()
+    var configuration: TreeDragDropConfiguration<Content> = .init() {
+        didSet {
+            contentInset = configuration.contentInsets
+        }
+    }
     var cellContentProvider: (@MainActor (FlatTreeEntry<Content>) -> AnyView)?
 
     // MARK: - Height Measurement
