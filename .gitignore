@@ -7,3 +7,6 @@ DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
 DESIGN_ANALYSIS.md
+Arboreal.xcodeproj/
+Derived/
+Workspace.xcworkspace/

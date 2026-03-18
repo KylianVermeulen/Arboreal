@@ -16,17 +16,6 @@ where Content: Sendable, Content.ID: Sendable {
     private(set) var dragState: DragState<Content> = .idle
     private var activePreviewLayout: PreviewLayout<Content>?
     private var isAnimatingDropCompletion = false
-    #if DEBUG
-    private var debugLabel: UILabel = {
-        let l = UILabel()
-        l.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        l.textColor = .white
-        l.backgroundColor = UIColor.black.withAlphaComponent(0.7)
-        l.numberOfLines = 0
-        l.layer.zPosition = 9999
-        return l
-    }()
-    #endif
 
     // MARK: - Configuration
 
@@ -60,9 +49,6 @@ where Content: Sendable, Content.ID: Sendable {
     private func setup() {
         layer.addSublayer(dropIndicatorLayer)
         alwaysBounceVertical = true
-        #if DEBUG
-        addSubview(debugLabel)
-        #endif
     }
 
     func installInteractions(dragDelegate: (any UIDragInteractionDelegate)?, dropDelegate: (any UIDropInteractionDelegate)?) {
@@ -357,11 +343,7 @@ where Content: Sendable, Content.ID: Sendable {
         // When dragging sections, use whole section groups (header + children)
         // as hit zones: top 50% = before, bottom 50% = after.
         if isDraggingRootContent {
-            let target = resolveSectionDropTarget(at: point, draggedIDs: draggedIDs)
-            #if DEBUG
-            updateDebugLabel(target)
-            #endif
-            return target
+            return resolveSectionDropTarget(at: point, draggedIDs: draggedIDs)
         }
 
         // During an active drag, use preview positions for hit testing
@@ -371,12 +353,7 @@ where Content: Sendable, Content.ID: Sendable {
             if activePreviewLayout != nil, let current = dragState.currentTarget {
                 return current
             }
-            let raw = DropTarget<Content>.atIndex(parentID: nil, index: rootCount)
-            let resolved = redirectRootTarget(raw)
-            #if DEBUG
-            updateDebugLabel(resolved)
-            #endif
-            return resolved
+            return redirectRootTarget(.atIndex(parentID: nil, index: rootCount))
         }
 
         let relativeY = point.y - rowTop
@@ -416,11 +393,7 @@ where Content: Sendable, Content.ID: Sendable {
             }
         }
 
-        let resolved = redirectRootTarget(target)
-        #if DEBUG
-        updateDebugLabel(resolved)
-        #endif
-        return resolved
+        return redirectRootTarget(target)
     }
 
     /// Resolves drop target for section drags using whole section groups as hit zones.
@@ -539,19 +512,6 @@ where Content: Sendable, Content.ID: Sendable {
 
         return target
     }
-
-    #if DEBUG
-    private func updateDebugLabel(_ target: DropTarget<Content>) {
-        switch target {
-        case .atIndex(let parentID, let index):
-            debugLabel.text = ".atIndex(parentID: \(parentID.map { "\($0)" } ?? "nil"), index: \(index))"
-        case .intoSection(let id):
-            debugLabel.text = ".intoSection(\(id))"
-        }
-        debugLabel.sizeToFit()
-        debugLabel.frame.origin = CGPoint(x: 8, y: contentOffset.y + bounds.height - debugLabel.frame.height - 8)
-    }
-    #endif
 
     // MARK: - Frame Calculations
 
