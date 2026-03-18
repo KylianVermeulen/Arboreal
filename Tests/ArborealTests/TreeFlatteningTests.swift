@@ -82,4 +82,13 @@ struct TreeFlatteningTests {
         #expect(result[0].hasChildren == false)
         #expect(result[0].isExpanded == false) // no children so not expanded
     }
+
+    @Test("Empty container stays expanded")
+    func emptyContainerStaysExpanded() {
+        let tree = [node("section", isContainer: true)]
+        let result = tree.flattened(expansionState: Set(["section"]))
+        #expect(result.count == 1)
+        #expect(result[0].hasChildren == false)
+        #expect(result[0].isExpanded == true)
+    }
 }

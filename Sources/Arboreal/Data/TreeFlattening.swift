@@ -23,7 +23,7 @@ extension Array {
                 parentID: nil,
                 indexInParent: rootIndex,
                 hasChildren: hasChildren,
-                isExpanded: isExpanded && hasChildren,
+                isExpanded: isExpanded && (hasChildren || root.content.isContainer),
                 isLastChild: rootIndex == rootCount - 1
             ))
 
