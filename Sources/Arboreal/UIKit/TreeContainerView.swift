@@ -13,6 +13,13 @@ where Content: Sendable, Content.ID: Sendable {
     private var rootCount: Int = 0
     private var cellPool = ViewReusePool<TreeNodeCell>(factory: { TreeNodeCell() })
     private var dropIndicatorLayer = DropIndicatorLayer()
+    private lazy var dropIndicatorHostView: UIView = {
+        let host = UIView()
+        host.isUserInteractionEnabled = false
+        host.backgroundColor = .clear
+        host.layer.addSublayer(dropIndicatorLayer)
+        return host
+    }()
     private(set) var dragState: DragState<Content> = .idle
     private var activePreviewLayout: PreviewLayout<Content>?
     private var isAnimatingDropCompletion = false
@@ -47,7 +54,7 @@ where Content: Sendable, Content.ID: Sendable {
     }
 
     private func setup() {
-        layer.addSublayer(dropIndicatorLayer)
+        addSubview(dropIndicatorHostView)
         alwaysBounceVertical = true
     }
 
@@ -183,6 +190,7 @@ where Content: Sendable, Content.ID: Sendable {
         measureHeightsIfNeeded()
         contentSize = CGSize(width: bounds.width, height: contentHeight)
         layoutVisibleCells()
+        bringSubviewToFront(dropIndicatorHostView)
     }
 
     // MARK: - Layout
@@ -191,7 +199,9 @@ where Content: Sendable, Content.ID: Sendable {
         super.layoutSubviews()
         measureHeightsIfNeeded()
         contentSize = CGSize(width: bounds.width, height: contentHeight)
+        dropIndicatorHostView.frame = CGRect(origin: .zero, size: contentSize)
         layoutVisibleCells()
+        bringSubviewToFront(dropIndicatorHostView)
     }
 
     private func layoutVisibleCells() {
@@ -691,13 +701,15 @@ where Content: Sendable, Content.ID: Sendable {
     /// Animates from the current preview layout to the new entries' final positions.
     /// Called on drop to smoothly close the gap and slide cells into place.
     /// Dragged entries appear instantly; their children animate expanding from the section header.
-    func animateDropCompletion(with newEntries: [FlatTreeEntry<Content>], draggedIDs topLevelDraggedIDs: Set<Content.ID>) {
+    func animateDropCompletion(with newEntries: [FlatTreeEntry<Content>], draggedIDs topLevelDraggedIDs: Set<Content.ID>, completion: @escaping @MainActor () -> Void) {
         flatEntries = newEntries
         activePreviewLayout = nil
 
         // Measure new entries and rebuild cumulative heights
         measureHeightsIfNeeded()
         contentSize = CGSize(width: bounds.width, height: contentHeight)
+        dropIndicatorHostView.frame = CGRect(origin: .zero, size: contentSize)
+        bringSubviewToFront(dropIndicatorHostView)
 
         let newIDs = Set(newEntries.map { AnyHashable($0.id) })
         cellPool.recycleAll(except: newIDs)
@@ -778,6 +790,7 @@ where Content: Sendable, Content.ID: Sendable {
         } completion: { _ in
             self.isAnimatingDropCompletion = false
             self.layoutVisibleCells()
+            completion()
         }
 
         dropIndicatorLayer.hide()

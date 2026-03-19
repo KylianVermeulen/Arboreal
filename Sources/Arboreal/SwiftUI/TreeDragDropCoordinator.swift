@@ -298,16 +298,21 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
         liftingCell = nil
 
         hapticController.fireDrop()
-        view.configuration.onDropCompleted?(payload, target)
-        view.configuration.onReorder?(newTree)
 
         // Animate from preview positions to final layout
         let newEntries = newTree.flattened(expansionState: expansionState.expandedIDs)
-        containerView.animateDropCompletion(with: newEntries, draggedIDs: draggedIDs)
+        containerView.animateDropCompletion(with: newEntries, draggedIDs: draggedIDs) { [weak self] in
+            guard let self else { return }
 
-        isPerformingDrop = false
-        containerView.transitionDragState(to: .idle)
-        hapticController.tearDown()
+            // Safe to allow SwiftUI re-entrant updates now
+            self.isPerformingDrop = false
+            self.containerView?.transitionDragState(to: .idle)
+            self.hapticController.tearDown()
+
+            // Fire callbacks after animation completes
+            self.view.configuration.onDropCompleted?(payload, target)
+            self.view.configuration.onReorder?(newTree)
+        }
     }
 
     public func dropInteraction(_ interaction: UIDropInteraction, previewForDropping item: UIDragItem, withDefault defaultPreview: UITargetedDragPreview) -> UITargetedDragPreview? {
@@ -351,26 +356,36 @@ public final class TreeDragDropCoordinator<Content: TreeNodeContent, CellContent
             y: cellFrameInWindow.midY - touchLocation.y
         )
 
+        let style = view.configuration.floatingDragStyle
+
         let snapshot = cell.snapshotView(afterScreenUpdates: false) ?? UIView()
-        snapshot.frame = cellFrameInWindow
+        snapshot.frame = CGRect(origin: .zero, size: cellFrameInWindow.size)
         snapshot.isUserInteractionEnabled = false
+        snapshot.backgroundColor = style.backgroundColor
+        snapshot.layer.cornerRadius = style.cornerRadius
+        snapshot.clipsToBounds = true
 
-        snapshot.backgroundColor = view.configuration.floatingDragBackgroundColor
-        snapshot.layer.cornerRadius = 10
-        snapshot.clipsToBounds = false
+        // Outer container for shadow (clipsToBounds must be false for shadow to render)
+        let container = UIView(frame: cellFrameInWindow)
+        container.isUserInteractionEnabled = false
+        container.backgroundColor = .clear
+        container.clipsToBounds = false
+        container.layer.shadowColor = style.shadowColor.cgColor
+        container.layer.shadowOpacity = style.shadowOpacity
+        container.layer.shadowRadius = style.shadowRadius
+        container.layer.shadowOffset = style.shadowOffset
+        container.layer.shadowPath = UIBezierPath(
+            roundedRect: CGRect(origin: .zero, size: cellFrameInWindow.size),
+            cornerRadius: style.cornerRadius
+        ).cgPath
+        container.addSubview(snapshot)
 
-        // Shadow
-        snapshot.layer.shadowColor = UIColor.black.cgColor
-        snapshot.layer.shadowOpacity = 0.25
-        snapshot.layer.shadowRadius = 12
-        snapshot.layer.shadowOffset = CGSize(width: 0, height: 4)
-
-        window.addSubview(snapshot)
-        floatingDragView = snapshot
+        window.addSubview(container)
+        floatingDragView = container
 
         // Slight scale-up on creation
         UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) {
-            snapshot.transform = CGAffineTransform(scaleX: 1.03, y: 1.03)
+            container.transform = CGAffineTransform(scaleX: style.liftScale, y: style.liftScale)
         }
     }
 

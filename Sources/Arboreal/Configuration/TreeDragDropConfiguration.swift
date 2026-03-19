@@ -40,8 +40,8 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
 
     // MARK: - Floating Drag View
 
-    /// Background color for the floating drag view that follows the user's finger.
-    public var floatingDragBackgroundColor: UIColor
+    /// Styling for the floating drag view that follows the user's finger during a drag. Defaults to ``FloatingDragStyle/default``.
+    public var floatingDragStyle: FloatingDragStyle
 
     // MARK: - Haptics
 
@@ -70,7 +70,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
         dropEnabled: Bool = true,
         restrictDropToContainers: Bool = false,
         dropPreviewTheme: DropPreviewTheme = .default,
-        floatingDragBackgroundColor: UIColor = UIColor(red: 0x1A/255.0, green: 0x40/255.0, blue: 0x78/255.0, alpha: 1),
+        floatingDragStyle: FloatingDragStyle = .default,
         hapticConfiguration: HapticConfiguration = .default,
         canDrag: (@MainActor @Sendable (Content) -> Bool)? = nil,
         onReorder: (@MainActor @Sendable ([TreeNode<Content>]) -> Void)? = nil,
@@ -84,7 +84,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
         self.dropEnabled = dropEnabled
         self.restrictDropToContainers = restrictDropToContainers
         self.dropPreviewTheme = dropPreviewTheme
-        self.floatingDragBackgroundColor = floatingDragBackgroundColor
+        self.floatingDragStyle = floatingDragStyle
         self.hapticConfiguration = hapticConfiguration
         self.canDrag = canDrag
         self.onReorder = onReorder

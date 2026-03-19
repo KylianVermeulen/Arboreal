@@ -96,6 +96,12 @@ config.dropPreviewTheme = DropPreviewTheme(
     cornerRadius: 10,
     horizontalPadding: 16
 )
+config.floatingDragStyle = FloatingDragStyle(
+    backgroundColor: .systemBackground,
+    cornerRadius: 12,
+    shadowOpacity: 0.3,
+    liftScale: 1.05
+)
 
 TreeDragDropView(
     tree: tree,
@@ -116,6 +122,7 @@ TreeDragDropView(
 | `TreeDragDropConfiguration` | Layout, behavior, and callback settings |
 | `ExpansionState` | Observable state tracking expanded sections |
 | `DropPreviewTheme` | Drop indicator appearance |
+| `FloatingDragStyle` | Floating drag view appearance (corner radius, shadow, scale) |
 | `HapticConfiguration` | Haptic feedback toggles |
 | `FlatTreeEntry` | Flattened row representation used for layout |
 | `DropTarget` | Where a drop lands (`.atIndex` or `.intoSection`) |
