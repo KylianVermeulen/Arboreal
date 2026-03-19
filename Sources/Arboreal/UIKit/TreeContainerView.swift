@@ -705,8 +705,11 @@ where Content: Sendable, Content.ID: Sendable {
         flatEntries = newEntries
         activePreviewLayout = nil
 
-        // Measure new entries and rebuild cumulative heights
+        // Measure any new entries and force-rebuild cumulative heights.
+        // measureHeightsIfNeeded() alone won't rebuild when all IDs are
+        // cached and count is unchanged — but the order has changed.
         measureHeightsIfNeeded()
+        rebuildCumulativeHeights()
         contentSize = CGSize(width: bounds.width, height: contentHeight)
         dropIndicatorHostView.frame = CGRect(origin: .zero, size: contentSize)
         bringSubviewToFront(dropIndicatorHostView)
