@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0] - 2026-03-20
+
+### Other
+- Detect entry reordering in measureHeightsIfNeeded
+
+
 ## [0.3.0-alpha.6] - 2026-03-19
 
 ### Fixed
