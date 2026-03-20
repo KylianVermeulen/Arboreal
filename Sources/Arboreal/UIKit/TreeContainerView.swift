@@ -101,6 +101,14 @@ where Content: Sendable, Content.ID: Sendable {
 
         if needsRebuild || rowHeights.count != flatEntries.count {
             rebuildCumulativeHeights()
+        } else {
+            // Detect reordering: rowHeights may reflect a stale entry order
+            for (i, entry) in flatEntries.enumerated() {
+                if rowHeights[i] != heightCache[entry.id]! {
+                    rebuildCumulativeHeights()
+                    break
+                }
+            }
         }
     }
 
