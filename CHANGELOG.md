@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.0-alpha.0] - 2026-04-11
+
+### Added
+- Add scrollEnabled config for embedding in parent ScrollView
+
+
 ## [0.3.0] - 2026-03-20
 
 ### Other
