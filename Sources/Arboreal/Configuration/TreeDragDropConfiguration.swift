@@ -10,6 +10,13 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
     public var contentInsets: UIEdgeInsets
     /// Vertical spacing between rows. Applied between consecutive rows (not after the last). Defaults to `0`.
     public var nodeSpacing: CGFloat
+    /// Whether the underlying scroll view scrolls its own content. Defaults to `true`.
+    ///
+    /// Set this to `false` when embedding a ``TreeDragDropView`` inside a parent SwiftUI
+    /// `ScrollView` (or other scrollable container). When disabled, all rows are laid out
+    /// unconditionally and the view reports its full content height to SwiftUI via
+    /// `sizeThatFits`, letting the parent container handle scrolling.
+    public var scrollEnabled: Bool
 
     // MARK: - Drag Behavior
 
@@ -65,6 +72,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
         indentationWidth: CGFloat = 20,
         contentInsets: UIEdgeInsets = .zero,
         nodeSpacing: CGFloat = 0,
+        scrollEnabled: Bool = true,
         dragEnabled: Bool = true,
         multiSelectDragEnabled: Bool = true,
         dropEnabled: Bool = true,
@@ -79,6 +87,7 @@ public struct TreeDragDropConfiguration<Content: TreeNodeContent> {
         self.indentationWidth = indentationWidth
         self.contentInsets = contentInsets
         self.nodeSpacing = nodeSpacing
+        self.scrollEnabled = scrollEnabled
         self.dragEnabled = dragEnabled
         self.multiSelectDragEnabled = multiSelectDragEnabled
         self.dropEnabled = dropEnabled

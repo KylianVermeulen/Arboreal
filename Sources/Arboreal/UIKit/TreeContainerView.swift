@@ -29,6 +29,8 @@ where Content: Sendable, Content.ID: Sendable {
     var configuration: TreeDragDropConfiguration<Content> = .init() {
         didSet {
             contentInset = configuration.contentInsets
+            isScrollEnabled = configuration.scrollEnabled
+            alwaysBounceVertical = configuration.scrollEnabled
         }
     }
     var cellContentProvider: (@MainActor (FlatTreeEntry<Content>) -> AnyView)?
@@ -71,10 +73,10 @@ where Content: Sendable, Content.ID: Sendable {
 
     // MARK: - Height Measurement Helpers
 
-    private func measureHeight(for entry: FlatTreeEntry<Content>) -> CGFloat {
+    private func measureHeight(for entry: FlatTreeEntry<Content>, width: CGFloat) -> CGFloat {
         guard let provider = cellContentProvider else { return 1 }
         let indent = CGFloat(entry.depth) * configuration.indentationWidth
-        let availableWidth = bounds.width - indent
+        let availableWidth = width - indent
         guard availableWidth > 0 else { return 1 }
         measurementController.rootView = provider(entry)
         measurementController.view.frame = CGRect(x: 0, y: 0, width: availableWidth, height: 0)
@@ -94,7 +96,7 @@ where Content: Sendable, Content.ID: Sendable {
         var needsRebuild = false
         for entry in flatEntries {
             if heightCache[entry.id] == nil {
-                heightCache[entry.id] = measureHeight(for: entry)
+                heightCache[entry.id] = measureHeight(for: entry, width: bounds.width)
                 needsRebuild = true
             }
         }
@@ -126,6 +128,38 @@ where Content: Sendable, Content.ID: Sendable {
 
     private var contentHeight: CGFloat {
         cumulativeHeights.last ?? 0
+    }
+
+    /// Computes the total content height for a given width, independent of the view's current bounds.
+    ///
+    /// Used by ``TreeDragDropView/sizeThatFits(_:uiView:context:)`` to report intrinsic height to
+    /// SwiftUI when the view is embedded in a parent scroll container. Returns `0` when the tree
+    /// is empty or the width is non-positive. Populates the shared height cache so a subsequent
+    /// `layoutSubviews` pass at the same width can reuse the measurements.
+    func intrinsicContentHeight(forWidth width: CGFloat) -> CGFloat {
+        guard width > 0, !flatEntries.isEmpty else { return 0 }
+
+        // Reuse the height cache when the width hasn't changed; otherwise invalidate.
+        if lastMeasuredWidth != width {
+            heightCache.removeAll()
+            lastMeasuredWidth = width
+        }
+
+        var total: CGFloat = 0
+        for (i, entry) in flatEntries.enumerated() {
+            let rowHeight: CGFloat
+            if let cached = heightCache[entry.id] {
+                rowHeight = cached
+            } else {
+                rowHeight = measureHeight(for: entry, width: width)
+                heightCache[entry.id] = rowHeight
+            }
+            total += rowHeight
+            if i < flatEntries.count - 1 {
+                total += configuration.nodeSpacing
+            }
+        }
+        return total
     }
 
     private func yPositionForIndex(_ index: Int) -> CGFloat {
@@ -225,15 +259,25 @@ where Content: Sendable, Content.ID: Sendable {
         // Skip cell recycling during active drag to avoid jitter
         let isDragging = dragState.isDragging
 
-        let visibleMinY = contentOffset.y
-        let visibleMaxY = contentOffset.y + bounds.height
+        let firstVisible: Int
+        let lastVisible: Int
 
-        // Binary search for first visible index
-        let firstVisible = max(0, indexForYPosition(visibleMinY))
-        var lastVisible = firstVisible
-        for i in firstVisible..<flatEntries.count {
-            if yPositionForIndex(i) > visibleMaxY { break }
-            lastVisible = i
+        if isScrollEnabled {
+            let visibleMinY = contentOffset.y
+            let visibleMaxY = contentOffset.y + bounds.height
+
+            // Binary search for first visible index
+            firstVisible = max(0, indexForYPosition(visibleMinY))
+            var last = firstVisible
+            for i in firstVisible..<flatEntries.count {
+                if yPositionForIndex(i) > visibleMaxY { break }
+                last = i
+            }
+            lastVisible = last
+        } else {
+            // Embedded mode: a parent scroll view controls visibility, so lay out every row.
+            firstVisible = 0
+            lastVisible = flatEntries.count - 1
         }
 
         guard firstVisible <= lastVisible, !flatEntries.isEmpty else {

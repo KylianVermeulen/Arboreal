@@ -91,6 +91,26 @@ public struct TreeDragDropView<Content: TreeNodeContent, CellContent: View>: UIV
         coordinator.selectedIDs = selectedIDs
         coordinator.expansionState = expansionState
         coordinator.updateEntries()
+
+        // Ask SwiftUI to re-query `sizeThatFits` when the tree changes so embedded mode
+        // reflects expand/collapse and insertions/removals in the parent scroll view.
+        if !configuration.scrollEnabled {
+            uiView.invalidateIntrinsicContentSize()
+        }
+    }
+
+    public func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: TreeContainerView<Content>,
+        context: Context
+    ) -> CGSize? {
+        // When internal scrolling is enabled, let SwiftUI use its default behavior
+        // (the scroll view fills the proposed size and handles its own scrolling).
+        guard !configuration.scrollEnabled else { return nil }
+
+        let width = proposal.width ?? UIView.layoutFittingExpandedSize.width
+        let height = uiView.intrinsicContentHeight(forWidth: width)
+        return CGSize(width: width, height: height)
     }
 
     public func makeCoordinator() -> TreeDragDropCoordinator<Content, CellContent> {
